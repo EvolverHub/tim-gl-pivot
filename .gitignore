@@ -1,0 +1,37 @@
+# Raw GL data CSVs — too large and contain sensitive financial data
+TIM GL Data/
+OLD TIM GL Data/
+
+# Reference Excel files — keep locally, do not commit
+OWC accounts.xlsx
+bank accounts.xlsx
+SEGMENTS.xlsx
+
+# Generated output — rebuild locally with build_gl_pivot_html.py
+# (commit only if you explicitly want to share the snapshot)
+# gl_pivot.html
+
+# Other generated HTML files
+december_profile.html
+december_sankey.html
+december_semantic_network_3d.html
+mapping_summary.html
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# macOS
+.DS_Store
+
+# Other scripts not part of this tool
+compare_gl_folders.py
+build_december_sankey_html.py
+build_december_semantic_network_3d_html.py
+build_mapping_summary_html.py
+profile_data_to_html.py
+GL-Folder-Comparison-Summary.md
+
+# NEXUS folder
+NEXUS/
