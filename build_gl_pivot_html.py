@@ -14,18 +14,21 @@ From OWC accounts.xlsx (joined on Conto Co.Ge. = Numero conto):
   OWC Categoria   — 8 top-level OWC categories (Inventories, Trade Receivable …)
   OWC Codice DB   — Detailed DB code (55 codes)
 
-From SEGMENTS.xlsx CDC sheet (joined on Segmento — only with --with-segment):
-  Seg Descrizione — Full segment description
-  SEGMENTI        — 5 top-level segment buckets (CO, ENT, STAFF, TECH, TELECOM)
-  FUNZIONE        — 31 functional sub-categories
+From SEGMENTS.xlsx CDC sheet:
+  --segment-summary  Resolves Segmento → SEGMENTI + FUNZIONE inside each chunk,
+                     then groups by those (5 × 31 values). Compact output for
+                     all 6 months combined — recommended default with segments.
+  --with-segment     Groups by raw Segmento code — ~14× more rows per file.
+                     Use only for single-month deep drill-downs.
 
 Usage
 -----
-    python3 build_gl_pivot_html.py                     # all months, default output
-    python3 build_gl_pivot_html.py --output my.html    # custom output name
-    python3 build_gl_pivot_html.py --chunk 200000      # larger chunks if RAM allows
-    python3 build_gl_pivot_html.py --with-segment      # add SEGMENTI/FUNZIONE dims (larger file)
-    python3 build_gl_pivot_html.py --months Jul Dec    # specific months only
+    python3 build_gl_pivot_html.py                        # all months, OWC only
+    python3 build_gl_pivot_html.py --segment-summary      # all months + SEGMENTI/FUNZIONE (recommended)
+    python3 build_gl_pivot_html.py --output my.html       # custom output name
+    python3 build_gl_pivot_html.py --chunk 200000         # larger chunks if RAM allows
+    python3 build_gl_pivot_html.py --with-segment         # raw Segmento grouping (single month recommended)
+    python3 build_gl_pivot_html.py --months Jul Dec       # specific months only
 
 CSV column layout (semicolon separator)
 ----------------------------------------
@@ -67,8 +70,10 @@ MONTH_NAMES: dict[int, str] = {
     1: "Jan", 2: "Feb", 3: "Mar", 4: "Apr",
     5: "May", 6: "Jun", 7: "Jul", 8: "Aug",
     9: "Sep", 10: "Oct", 11: "Nov", 12: "Dec",
+    13: "Adj",   # SAP period 13 — year-end adjustment postings
 }
-MONTH_ORDER = list(MONTH_NAMES.values())
+MONTH_ORDER = ["Jan","Feb","Mar","Apr","May","Jun",
+               "Jul","Aug","Sep","Oct","Nov","Dec","Adj"]
 
 # Full 18-column name list; the file header only has 17 names, col 17 is unnamed
 CSV_ALL_COLS = [
@@ -84,8 +89,9 @@ NEEDED_COLS_BASE = [
 ]
 NEEDED_COLS_SEG = NEEDED_COLS_BASE + ["Segmento"]
 
-BASE_GROUP_KEYS = ["Società", "Anno", "Mese", "Conto Co.Ge.", "Tipo doc.", "Div. Soc."]
-FULL_GROUP_KEYS = BASE_GROUP_KEYS + ["Segmento"]
+BASE_GROUP_KEYS    = ["Società", "Anno", "Mese", "Conto Co.Ge.", "Tipo doc.", "Div. Soc."]
+FULL_GROUP_KEYS    = BASE_GROUP_KEYS + ["Segmento"]
+SUMMARY_GROUP_KEYS = BASE_GROUP_KEYS + ["SEGMENTI", "FUNZIONE"]  # compact segment mode
 
 _NONE_STR = "(vuoto)"
 
@@ -132,34 +138,38 @@ def load_owc_lookup(path: Path) -> pd.DataFrame:
     return df
 
 
-def load_segments_lookup(path: Path) -> pd.DataFrame:
+def load_segments_lookup(path: Path) -> tuple[pd.DataFrame, dict]:
     """
-    Returns a DataFrame indexed by segment code with columns:
-      Seg Descrizione, SEGMENTI, FUNZIONE
-    Loads only leaf nodes (Calc = 'N') from the CDC sheet.
+    Returns (DataFrame, dict) where:
+      DataFrame — indexed by segment code, columns: Seg Descrizione, SEGMENTI, FUNZIONE
+      dict      — {code: (SEGMENTI, FUNZIONE)} for fast per-row chunk lookups
     """
     wb = load_workbook(path, read_only=True, data_only=True)
     ws = wb["CDC"]
     rows = list(ws.iter_rows(values_only=True))
     wb.close()
 
-    # Row 0 is the header
     records = []
+    fast_lookup: dict[str, tuple[str, str]] = {}
     for row in rows[1:]:
         if not row or not row[0]:
             continue
         code = str(row[0]).strip().upper()
+        segmenti = str(row[6]).strip() if row[6] else "(Unmapped)"
+        funzione = str(row[7]).strip() if row[7] else "(Unmapped)"
         records.append({
             "Segmento":        code,
             "Seg Descrizione": str(row[1]).strip() if row[1] else "",
-            "SEGMENTI":        str(row[6]).strip() if row[6] else "(Unmapped)",
-            "FUNZIONE":        str(row[7]).strip() if row[7] else "(Unmapped)",
+            "SEGMENTI":        segmenti,
+            "FUNZIONE":        funzione,
         })
+        fast_lookup[code] = (segmenti, funzione)
 
     df = pd.DataFrame(records).drop_duplicates("Segmento").set_index("Segmento")
     print(f"  SEGMENTS (CDC) loaded: {len(df):,} codes, "
-          f"{df['SEGMENTI'].nunique()} top-level segments")
-    return df
+          f"{df['SEGMENTI'].nunique()} top-level segments, "
+          f"{df['FUNZIONE'].nunique()} functions")
+    return df, fast_lookup
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -183,11 +193,13 @@ def process_file(
     group_keys: list[str],
     needed_cols: list[str],
     chunk_size: int,
+    seg_lookup: dict | None = None,   # {code: (SEGMENTI, FUNZIONE)} for summary mode
 ) -> pd.DataFrame:
     """Read *csv_path* in chunks, aggregate within each chunk, return combined df."""
     parts: list[pd.DataFrame] = []
     t0 = time.time()
     total_rows = 0
+    use_seg_summary = seg_lookup is not None
 
     for chunk_idx, chunk in enumerate(
         pd.read_csv(
@@ -224,6 +236,12 @@ def process_file(
 
         chunk["Anno"] = chunk["Eser."]
         chunk["Mese"] = chunk["Per."].map(_month_label)
+
+        # Segment-summary mode: resolve raw code → SEGMENTI / FUNZIONE inline
+        if use_seg_summary and "Segmento" in chunk.columns:
+            seg_col = chunk["Segmento"].str.upper()
+            chunk["SEGMENTI"] = seg_col.map(lambda c: seg_lookup.get(c, ("(Unmapped)", "(Unmapped)"))[0])
+            chunk["FUNZIONE"]  = seg_col.map(lambda c: seg_lookup.get(c, ("(Unmapped)", "(Unmapped)"))[1])
 
         agg = (
             chunk.groupby(group_keys, dropna=False, sort=False)
@@ -275,7 +293,8 @@ def enrich(
     df["OWC Categoria"] = df["OWC Categoria"].fillna("(Non-OWC)")
     df["OWC Codice DB"] = df["OWC Codice DB"].fillna("(Non-OWC)")
 
-    if segments is not None and "Segmento" in df.columns:
+    # Full raw-segment join (--with-segment mode)
+    if segments is not None and "Segmento" in df.columns and "SEGMENTI" not in df.columns:
         df["_seg"] = df["Segmento"].str.upper()
         df = df.join(segments, on="_seg", how="left")
         df.drop(columns=["_seg"], inplace=True)
@@ -293,6 +312,7 @@ def build_html(
     num_files: int,
     has_owc: bool,
     has_segments: bool,
+    seg_summary: bool = False,   # True when SEGMENTI/FUNZIONE are group keys (no raw Segmento)
 ) -> str:
     data_json   = json.dumps(records, ensure_ascii=False, default=str)
     num_records = len(records)
@@ -338,40 +358,49 @@ def build_html(
     seg_options = ""
     seg_presets = ""
     if has_segments:
-        seg_options = """
+        raw_option  = "" if seg_summary else '<option value="seg_raw_mese">Raw Segmento code by Month</option>'
+        desc_option = "" if seg_summary else '<option value="seg_desc_mese">Segment Description by Month</option>'
+        seg_options = f"""
     <optgroup label="Segments (CDC)">
       <option value="segmenti_mese">SEGMENTI by Month (Importo)</option>
       <option value="segmenti_societa">SEGMENTI by Company (Importo)</option>
       <option value="funzione_mese">FUNZIONE by Month (Importo)</option>
-      <option value="seg_desc_mese">Segment Description by Month</option>
-      <option value="seg_raw_mese">Raw Segmento code by Month</option>
+      <option value="segmenti_funzione_mese">SEGMENTI + FUNZIONE by Month</option>
+      <option value="netto_segmenti">Net by SEGMENTI &amp; Company (heatmap)</option>
+      {desc_option}
+      {raw_option}
     </optgroup>"""
-        seg_presets = """
-  segmenti_mese: {
-    rows: ["SEGMENTI"],
-    cols: ["Mese"],
-    aggName: "Sum", vals: ["Importo"], renderer: "Table"
-  },
-  segmenti_societa: {
-    rows: ["SEGMENTI"],
-    cols: ["Società"],
-    aggName: "Sum", vals: ["Importo"], renderer: "Table"
-  },
-  funzione_mese: {
-    rows: ["FUNZIONE"],
-    cols: ["Mese"],
-    aggName: "Sum", vals: ["Importo"], renderer: "Table"
-  },
-  seg_desc_mese: {
-    rows: ["Seg Descrizione"],
-    cols: ["Mese"],
-    aggName: "Sum", vals: ["Importo"], renderer: "Table"
-  },
+        raw_preset  = "" if seg_summary else """
   seg_raw_mese: {
-    rows: ["Segmento"],
-    cols: ["Mese"],
+    rows: ["Segmento"], cols: ["Mese"],
     aggName: "Sum", vals: ["Importo"], renderer: "Table"
   },"""
+        desc_preset = "" if seg_summary else """
+  seg_desc_mese: {
+    rows: ["Seg Descrizione"], cols: ["Mese"],
+    aggName: "Sum", vals: ["Importo"], renderer: "Table"
+  },"""
+        seg_presets = f"""
+  segmenti_mese: {{
+    rows: ["SEGMENTI"], cols: ["Mese"],
+    aggName: "Sum", vals: ["Importo"], renderer: "Table"
+  }},
+  segmenti_societa: {{
+    rows: ["SEGMENTI"], cols: ["Società"],
+    aggName: "Sum", vals: ["Importo"], renderer: "Table"
+  }},
+  funzione_mese: {{
+    rows: ["FUNZIONE"], cols: ["Mese"],
+    aggName: "Sum", vals: ["Importo"], renderer: "Table"
+  }},
+  segmenti_funzione_mese: {{
+    rows: ["SEGMENTI", "FUNZIONE"], cols: ["Mese"],
+    aggName: "Sum", vals: ["Importo"], renderer: "Table"
+  }},
+  netto_segmenti: {{
+    rows: ["SEGMENTI"], cols: ["Società"],
+    aggName: "Sum", vals: ["Netto"], renderer: "Table Heatmap"
+  }},{raw_preset}{desc_preset}"""
 
     enrichment_badge = ""
     if has_owc:
@@ -603,7 +632,7 @@ var PRESETS = {{
 
 // ── month sort ───────────────────────────────────────────────────────────────
 var MONTH_ORDER = ["Jan","Feb","Mar","Apr","May","Jun",
-                   "Jul","Aug","Sep","Oct","Nov","Dec"];
+                   "Jul","Aug","Sep","Oct","Nov","Dec","Adj"];
 var monthSorter = $.pivotUtilities.sortAs(MONTH_ORDER);
 
 // ── render ───────────────────────────────────────────────────────────────────
@@ -654,10 +683,18 @@ def main() -> int:
         help="Rows per CSV chunk (default 100 000); increase if RAM allows",
     )
     ap.add_argument(
+        "--segment-summary", action="store_true", dest="seg_summary",
+        help=(
+            "Recommended: resolve Segmento → SEGMENTI + FUNZIONE inside each chunk "
+            "and group by those. Adds segment dimensions with compact output size — "
+            "works well for all 6 months combined."
+        ),
+    )
+    ap.add_argument(
         "--with-segment", action="store_true", dest="with_segment",
         help=(
-            "Include Segmento as a grouping key AND join SEGMENTS.xlsx "
-            "(produces ~14× more rows per file — recommended for single-month runs)"
+            "Group by raw Segmento code AND join SEGMENTS.xlsx for full descriptions. "
+            "Produces ~14× more rows per file — recommended for single-month runs only."
         ),
     )
     ap.add_argument(
@@ -688,23 +725,35 @@ def main() -> int:
             print("ERROR: No CSV files matched --months filter.", file=sys.stderr)
             return 1
 
-    use_segment = getattr(args, "with_segment", False)
-    use_owc     = not getattr(args, "no_owc", False)
+    use_segment  = getattr(args, "with_segment", False)
+    use_seg_sum  = getattr(args, "seg_summary", False) and not use_segment
+    use_owc      = not getattr(args, "no_owc", False)
 
-    group_keys   = FULL_GROUP_KEYS if use_segment else BASE_GROUP_KEYS
-    needed_cols  = NEEDED_COLS_SEG if use_segment else NEEDED_COLS_BASE
+    if use_segment:
+        group_keys  = FULL_GROUP_KEYS
+        needed_cols = NEEDED_COLS_SEG
+        seg_mode    = "raw Segmento (--with-segment)"
+    elif use_seg_sum:
+        group_keys  = SUMMARY_GROUP_KEYS
+        needed_cols = NEEDED_COLS_SEG
+        seg_mode    = "SEGMENTI+FUNZIONE summary (--segment-summary)"
+    else:
+        group_keys  = BASE_GROUP_KEYS
+        needed_cols = NEEDED_COLS_BASE
+        seg_mode    = "none  (add --segment-summary to include segment dimensions)"
 
     print("TIM GL Pivot Builder")
     print(f"  Source dir : {gl_dir}")
     print(f"  CSV files  : {len(csv_files)}")
     print(f"  Chunk size : {args.chunk:,}")
     print(f"  OWC enrich : {'yes' if use_owc else 'no (--no-owc)'}")
-    print(f"  Segmento   : {'yes + SEGMENTS enrich (--with-segment)' if use_segment else 'no  (add --with-segment for segment dimensions)'}")
+    print(f"  Segments   : {seg_mode}")
     print()
 
     # ── load reference data ──────────────────────────────────────────────────
-    owc_df   = None
-    seg_df   = None
+    owc_df      = None
+    seg_df      = None
+    seg_lookup  = None   # fast dict for inline summary mode
 
     if use_owc:
         owc_path = root / "OWC accounts.xlsx"
@@ -714,20 +763,25 @@ def main() -> int:
         else:
             print(f"WARNING: OWC accounts.xlsx not found at {owc_path} — skipping OWC enrichment")
 
-    if use_segment:
+    if use_segment or use_seg_sum:
         seg_path = root / "SEGMENTS.xlsx"
         if seg_path.exists():
             print("Loading SEGMENTS.xlsx…")
-            seg_df = load_segments_lookup(seg_path)
+            seg_df, seg_lookup = load_segments_lookup(seg_path)
         else:
             print(f"WARNING: SEGMENTS.xlsx not found at {seg_path} — skipping segment enrichment")
+            seg_lookup = None
     print()
 
     # ── process CSV files ────────────────────────────────────────────────────
     all_parts: list[pd.DataFrame] = []
     for i, csv_path in enumerate(csv_files, start=1):
         print(f"[{i}/{len(csv_files)}] {csv_path.name}")
-        df = process_file(csv_path, group_keys, needed_cols, args.chunk)
+        # Pass seg_lookup only in summary mode (inline resolution per chunk)
+        df = process_file(
+            csv_path, group_keys, needed_cols, args.chunk,
+            seg_lookup=seg_lookup if use_seg_sum else None,
+        )
         if not df.empty:
             all_parts.append(df)
         print()
@@ -772,9 +826,9 @@ def main() -> int:
             total  = len(final)
             print(f"  SEGMENTS coverage: {mapped:,}/{total:,} rows ({100*mapped/total:.1f}%)")
 
-    records    = final.to_dict(orient="records")
-    has_owc    = owc_df is not None
-    has_segs   = seg_df is not None and "SEGMENTI" in final.columns
+    records  = final.to_dict(orient="records")
+    has_owc  = owc_df is not None
+    has_segs = "SEGMENTI" in final.columns
     print(f"\nFinal aggregated rows: {len(records):,}")
 
     size_kb = len(json.dumps(records, default=str).encode()) / 1024
@@ -782,10 +836,13 @@ def main() -> int:
     if size_kb > 50_000:
         print(
             "WARNING: JSON payload > 50 MB — browser may be slow.\n"
-            "         Consider re-running without --with-segment."
+            "         Consider using --segment-summary instead of --with-segment."
         )
 
-    html_content = build_html(records, len(csv_files), has_owc, has_segs)
+    html_content = build_html(
+        records, len(csv_files), has_owc, has_segs,
+        seg_summary=use_seg_sum,
+    )
 
     out = args.output if args.output.is_absolute() else root / args.output
     out.write_text(html_content, encoding="utf-8")
