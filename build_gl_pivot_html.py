@@ -138,6 +138,36 @@ def load_owc_lookup(path: Path) -> pd.DataFrame:
     return df
 
 
+def load_bank_lookup(path: Path) -> pd.DataFrame:
+    """
+    Returns a DataFrame indexed by normalised GL account code with column:
+      Banca Descrizione — human-readable bank account / sub-account name
+    Reads the 'conti correnti' sheet; header is at row index 10 (col 1 = 'Conto').
+    """
+    wb = load_workbook(path, read_only=True, data_only=True)
+    ws = wb["conti correnti"]
+    rows = list(ws.iter_rows(values_only=True))
+    wb.close()
+
+    records = []
+    seen: set[str] = set()
+    for row in rows[11:]:          # skip header row at index 10
+        if not row or not row[1]:
+            continue
+        code = _norm(row[1])
+        if not code or code == "CONTO":
+            continue
+        if code in seen:
+            continue
+        seen.add(code)
+        testo = str(row[2]).strip() if row[2] else code
+        records.append({"Conto Co.Ge.": code, "Banca Descrizione": testo})
+
+    df = pd.DataFrame(records).set_index("Conto Co.Ge.")
+    print(f"  Bank accounts loaded: {len(df):,} GL codes")
+    return df
+
+
 def load_segments_lookup(path: Path) -> tuple[pd.DataFrame, dict]:
     """
     Returns (DataFrame, dict) where:
@@ -281,17 +311,24 @@ def enrich(
     df: pd.DataFrame,
     owc: pd.DataFrame,
     segments: pd.DataFrame | None,
+    bank: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
-    """Left-join OWC and (optionally) SEGMENTS onto the aggregated GL data."""
+    """Left-join OWC, bank accounts and (optionally) SEGMENTS onto the aggregated GL data."""
     # Normalise key for join
     df["_key"] = df["Conto Co.Ge."].str.upper()
     df = df.join(owc, on="_key", how="left")
-    df.drop(columns=["_key"], inplace=True)
 
     # Fill unmapped accounts
     df["OWC Testo"]     = df["OWC Testo"].fillna("(Non-OWC)")
     df["OWC Categoria"] = df["OWC Categoria"].fillna("(Non-OWC)")
     df["OWC Codice DB"] = df["OWC Codice DB"].fillna("(Non-OWC)")
+
+    # Bank account enrichment
+    if bank is not None and not bank.empty:
+        df = df.join(bank, on="_key", how="left")
+        df["Banca Descrizione"] = df["Banca Descrizione"].fillna("(Non-Bank)")
+
+    df.drop(columns=["_key"], inplace=True)
 
     # Full raw-segment join (--with-segment mode)
     if segments is not None and "Segmento" in df.columns and "SEGMENTI" not in df.columns:
@@ -312,6 +349,7 @@ def build_html(
     num_files: int,
     has_owc: bool,
     has_segments: bool,
+    has_bank: bool = False,
     seg_summary: bool = False,   # True when SEGMENTI/FUNZIONE are group keys (no raw Segmento)
 ) -> str:
     data_json   = json.dumps(records, ensure_ascii=False, default=str)
@@ -351,6 +389,38 @@ def build_html(
   },
   owc_net_categoria: {
     rows: ["OWC Categoria"],
+    cols: ["Società"],
+    aggName: "Sum", vals: ["Netto"], renderer: "Table Heatmap"
+  },"""
+
+    bank_options = ""
+    bank_presets = ""
+    if has_bank:
+        bank_options = """
+    <optgroup label="Bank Accounts">
+      <option value="banca_mese">Bank Account by Month (Importo)</option>
+      <option value="banca_societa">Bank Account by Company (Importo)</option>
+      <option value="banca_net_mese">Net (Dare–Avere) by Bank Account &amp; Month (heatmap)</option>
+      <option value="banca_net_societa">Net by Bank Account &amp; Company (heatmap)</option>
+    </optgroup>"""
+        bank_presets = """
+  banca_mese: {
+    rows: ["Banca Descrizione"],
+    cols: ["Mese"],
+    aggName: "Sum", vals: ["Importo"], renderer: "Table"
+  },
+  banca_societa: {
+    rows: ["Banca Descrizione"],
+    cols: ["Società"],
+    aggName: "Sum", vals: ["Importo"], renderer: "Table"
+  },
+  banca_net_mese: {
+    rows: ["Banca Descrizione"],
+    cols: ["Mese"],
+    aggName: "Sum", vals: ["Netto"], renderer: "Table Heatmap"
+  },
+  banca_net_societa: {
+    rows: ["Banca Descrizione"],
     cols: ["Società"],
     aggName: "Sum", vals: ["Netto"], renderer: "Table Heatmap"
   },"""
@@ -405,6 +475,8 @@ def build_html(
     enrichment_badge = ""
     if has_owc:
         enrichment_badge += " &nbsp;·&nbsp; OWC enriched"
+    if has_bank:
+        enrichment_badge += " &nbsp;·&nbsp; BANK enriched"
     if has_segments:
         enrichment_badge += " &nbsp;·&nbsp; SEGMENTS enriched"
 
@@ -536,6 +608,7 @@ def build_html(
       <option value="importo_anno_mese">Importo by Year/Month &amp; Company</option>
     </optgroup>
     {owc_options}
+    {bank_options}
     {seg_options}
   </select>
   <button id="btn-apply">Apply</button>
@@ -595,6 +668,7 @@ var PRESETS = {{
     aggName: "Sum", vals: ["Importo"], renderer: "Table"
   }},
   {owc_presets}
+  {bank_presets}
   {seg_presets}
 }};
 
@@ -702,6 +776,10 @@ def main() -> int:
         help="Skip OWC accounts.xlsx enrichment",
     )
     ap.add_argument(
+        "--no-bank", action="store_true",
+        help="Skip bank accounts.xlsx enrichment",
+    )
+    ap.add_argument(
         "--months", nargs="+", metavar="MONTH",
         help="Process only these months (e.g. Jul Aug Dec). Case-insensitive.",
     )
@@ -728,6 +806,7 @@ def main() -> int:
     use_segment  = getattr(args, "with_segment", False)
     use_seg_sum  = getattr(args, "seg_summary", False) and not use_segment
     use_owc      = not getattr(args, "no_owc", False)
+    use_bank     = not getattr(args, "no_bank", False)
 
     if use_segment:
         group_keys  = FULL_GROUP_KEYS
@@ -747,11 +826,13 @@ def main() -> int:
     print(f"  CSV files  : {len(csv_files)}")
     print(f"  Chunk size : {args.chunk:,}")
     print(f"  OWC enrich : {'yes' if use_owc else 'no (--no-owc)'}")
+    print(f"  Bank enrich: {'yes' if use_bank else 'no (--no-bank)'}")
     print(f"  Segments   : {seg_mode}")
     print()
 
     # ── load reference data ──────────────────────────────────────────────────
     owc_df      = None
+    bank_df     = None
     seg_df      = None
     seg_lookup  = None   # fast dict for inline summary mode
 
@@ -762,6 +843,14 @@ def main() -> int:
             owc_df = load_owc_lookup(owc_path)
         else:
             print(f"WARNING: OWC accounts.xlsx not found at {owc_path} — skipping OWC enrichment")
+
+    if use_bank:
+        bank_path = root / "bank accounts.xlsx"
+        if bank_path.exists():
+            print("Loading bank accounts.xlsx…")
+            bank_df = load_bank_lookup(bank_path)
+        else:
+            print(f"WARNING: bank accounts.xlsx not found at {bank_path} — skipping bank enrichment")
 
     if use_segment or use_seg_sum:
         seg_path = root / "SEGMENTS.xlsx"
@@ -814,13 +903,22 @@ def main() -> int:
     final.drop(columns=["_ms"], inplace=True)
 
     # ── enrich ───────────────────────────────────────────────────────────────
-    if owc_df is not None or seg_df is not None:
+    if owc_df is not None or bank_df is not None or seg_df is not None:
         print("Enriching with reference data…", flush=True)
-        final = enrich(final, owc_df if owc_df is not None else pd.DataFrame(), seg_df)
+        final = enrich(
+            final,
+            owc_df if owc_df is not None else pd.DataFrame(),
+            seg_df,
+            bank=bank_df,
+        )
         if owc_df is not None:
             mapped   = (final["OWC Categoria"] != "(Non-OWC)").sum()
             total    = len(final)
             print(f"  OWC coverage: {mapped:,}/{total:,} rows ({100*mapped/total:.1f}%)")
+        if bank_df is not None:
+            mapped = (final["Banca Descrizione"] != "(Non-Bank)").sum()
+            total  = len(final)
+            print(f"  Bank coverage: {mapped:,}/{total:,} rows ({100*mapped/total:.1f}%)")
         if seg_df is not None and "SEGMENTI" in final.columns:
             mapped = (final["SEGMENTI"] != "(Unmapped)").sum()
             total  = len(final)
@@ -828,6 +926,7 @@ def main() -> int:
 
     records  = final.to_dict(orient="records")
     has_owc  = owc_df is not None
+    has_bank = bank_df is not None
     has_segs = "SEGMENTI" in final.columns
     print(f"\nFinal aggregated rows: {len(records):,}")
 
@@ -841,6 +940,7 @@ def main() -> int:
 
     html_content = build_html(
         records, len(csv_files), has_owc, has_segs,
+        has_bank=has_bank,
         seg_summary=use_seg_sum,
     )
 
