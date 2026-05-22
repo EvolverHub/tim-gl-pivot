@@ -2,18 +2,80 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="refresh" content="0; url=gl_pivot.html">
-  <title>TIM GL Data — Pivot Table</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TIM GL Data</title>
   <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-      display: flex; align-items: center; justify-content: center;
-      min-height: 100vh; margin: 0; background: #f0f2f7; color: #1b2230;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #f0f2f7; color: #1b2230;
+      min-height: 100vh;
+      display: flex; flex-direction: column;
     }
-    a { color: #162d50; font-weight: 600; }
+    header {
+      background: #162d50; color: #fff;
+      padding: 20px 32px;
+    }
+    header h1 { font-size: 1.3rem; font-weight: 700; letter-spacing: .01em; }
+    header p  { font-size: 0.85rem; opacity: .6; margin-top: 4px; }
+
+    main {
+      flex: 1;
+      display: flex; align-items: center; justify-content: center;
+      padding: 48px 24px; gap: 24px; flex-wrap: wrap;
+    }
+
+    .card {
+      display: block; text-decoration: none; color: inherit;
+      background: #fff; border: 1px solid #dde4ef; border-radius: 12px;
+      padding: 32px 36px; width: 300px;
+      transition: box-shadow .15s, transform .15s;
+    }
+    .card:hover {
+      box-shadow: 0 6px 24px rgba(22,45,80,.12);
+      transform: translateY(-2px);
+    }
+    .card-icon {
+      font-size: 2rem; margin-bottom: 14px;
+    }
+    .card h2 { font-size: 1.1rem; font-weight: 700; margin-bottom: 8px; color: #162d50; }
+    .card p  { font-size: 0.84rem; color: #5f6b7d; line-height: 1.5; }
+    .card .arrow {
+      display: inline-block; margin-top: 18px;
+      font-size: 0.82rem; font-weight: 700;
+      color: #162d50;
+    }
+
+    footer {
+      text-align: center; padding: 12px;
+      font-size: 0.72rem; color: #9aa5b4;
+    }
   </style>
 </head>
 <body>
-  <p>Redirecting to the pivot table&hellip; <a href="gl_pivot.html">Click here if not redirected.</a></p>
+
+<header>
+  <h1>TIM GL Data</h1>
+  <p>Interactive analysis tools for TIM General Ledger data</p>
+</header>
+
+<main>
+  <a href="gl_pivot.html" class="card">
+    <div class="card-icon">&#x1F4CA;</div>
+    <h2>Pivot Table</h2>
+    <p>Drag-and-drop pivot with presets for GL core, OWC, bank accounts, and segments. Aggregated view across all months.</p>
+    <span class="arrow">Open &rarr;</span>
+  </a>
+
+  <a href="gl_explorer.html" class="card">
+    <div class="card-icon">&#x1F50D;</div>
+    <h2>Data Explorer</h2>
+    <p>Filterable, sortable table across all 88K aggregated rows. Column filters, quick search, and CSV export.</p>
+    <span class="arrow">Open &rarr;</span>
+  </a>
+</main>
+
+<footer>TIM GL Data &mdash; Built with PivotTable.js &amp; AG Grid Community</footer>
+
 </body>
 </html>

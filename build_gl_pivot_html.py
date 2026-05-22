@@ -593,6 +593,11 @@ def build_html(
     {num_files} monthly file{'s' if num_files != 1 else ''}
     &nbsp;·&nbsp; {num_records:,} aggregated rows{enrichment_badge}
   </span>
+  <a href="gl_explorer.html"
+     style="margin-left:auto;color:#adc4e4;font-size:0.81rem;text-decoration:none;
+            padding:4px 12px;border:1px solid #4a6a96;border-radius:4px;white-space:nowrap;">
+    Data Explorer &rarr;
+  </a>
 </header>
 
 <div class="toolbar">
@@ -729,6 +734,277 @@ $(function() {{
   $("#btn-apply").on("click", function() {{
     renderPreset($("#preset-select").val());
   }});
+}});
+</script>
+</body>
+</html>
+"""
+
+
+# ── Explorer HTML (AG Grid table) ─────────────────────────────────────────────
+
+def build_explorer_html(
+    records: list[dict],
+    num_files: int,
+    has_owc: bool,
+    has_bank: bool = False,
+    has_segments: bool = False,
+) -> str:
+    num_records = len(records)
+    data_json   = json.dumps(records, ensure_ascii=False, default=str)
+
+    enrichment_badge = ""
+    if has_owc:
+        enrichment_badge += " &nbsp;·&nbsp; OWC enriched"
+    if has_bank:
+        enrichment_badge += " &nbsp;·&nbsp; BANK enriched"
+    if has_segments:
+        enrichment_badge += " &nbsp;·&nbsp; SEGMENTS enriched"
+
+    # Build JS column-definition array (Python strings, no f-string escaping needed)
+    cols = [
+        '{ field: "Società",      filter: "agSetColumnFilter",    width: 88,  pinned: "left" }',
+        '{ field: "Anno",         filter: "agSetColumnFilter",    width: 72 }',
+        '{ field: "Mese",         filter: "agSetColumnFilter",    width: 72,  comparator: monthCmp, filterParams: { comparator: monthCmp } }',
+        '{ field: "Conto Co.Ge.", filter: "agTextColumnFilter",   width: 130 }',
+        '{ field: "Tipo doc.",    filter: "agSetColumnFilter",    width: 90 }',
+        '{ field: "Div. Soc.",    filter: "agSetColumnFilter",    width: 85 }',
+        '{ field: "Importo",      filter: "agNumberColumnFilter", width: 145, type: "numericColumn", valueFormatter: fmtNum }',
+        '{ field: "Imp. Avere",   filter: "agNumberColumnFilter", width: 145, type: "numericColumn", valueFormatter: fmtNum }',
+        '{ field: "Netto",        filter: "agNumberColumnFilter", width: 145, type: "numericColumn", valueFormatter: fmtNum }',
+        '{ field: "Transazioni",  filter: "agNumberColumnFilter", width: 110, type: "numericColumn" }',
+    ]
+    if has_owc:
+        cols += [
+            '{ field: "OWC Categoria", filter: "agSetColumnFilter",  width: 155 }',
+            '{ field: "OWC Codice DB", filter: "agSetColumnFilter",  width: 135, hide: true }',
+            '{ field: "OWC Testo",     filter: "agTextColumnFilter", width: 230, hide: true }',
+        ]
+    if has_bank:
+        cols += [
+            '{ field: "Banca Descrizione", filter: "agSetColumnFilter", width: 260 }',
+        ]
+    if has_segments:
+        cols += [
+            '{ field: "SEGMENTI", filter: "agSetColumnFilter", width: 110 }',
+            '{ field: "FUNZIONE", filter: "agSetColumnFilter", width: 150 }',
+        ]
+
+    col_defs_js = ",\n  ".join(cols)
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TIM GL Data &mdash; Explorer</title>
+
+  <link rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/ag-grid-community@31/styles/ag-grid.min.css"
+    crossorigin="anonymous">
+  <link rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/ag-grid-community@31/styles/ag-theme-quartz.min.css"
+    crossorigin="anonymous">
+
+  <style>
+    *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    html, body {{ height: 100%; }}
+    body {{
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #f0f2f7; color: #1b2230;
+      display: flex; flex-direction: column;
+    }}
+
+    header {{
+      background: #162d50; color: #fff;
+      padding: 10px 20px;
+      display: flex; align-items: center; gap: 14px;
+      flex-shrink: 0;
+    }}
+    header h1 {{ font-size: 1.05rem; font-weight: 600; }}
+    .header-meta {{ font-size: 0.77rem; opacity: .6; white-space: nowrap; }}
+    .nav-link {{
+      margin-left: auto; color: #adc4e4; font-size: 0.81rem;
+      text-decoration: none; padding: 4px 12px;
+      border: 1px solid #4a6a96; border-radius: 4px; white-space: nowrap;
+    }}
+    .nav-link:hover {{ background: #1f3f6e; color: #fff; }}
+
+    .toolbar {{
+      background: #fff; border-bottom: 1px solid #dde4ef;
+      padding: 7px 16px; display: flex; align-items: center;
+      gap: 8px; flex-shrink: 0; flex-wrap: wrap;
+    }}
+    #quick-filter {{
+      font-size: 0.82rem; padding: 5px 10px;
+      border: 1px solid #c8d1e0; border-radius: 5px;
+      width: 270px; outline: none;
+    }}
+    #quick-filter:focus {{ border-color: #162d50; box-shadow: 0 0 0 2px #dce8f8; }}
+    .toolbar button {{
+      font-size: 0.81rem; font-weight: 600; padding: 5px 13px;
+      border-radius: 5px; cursor: pointer; white-space: nowrap; border: none;
+    }}
+    .btn-primary {{ background: #162d50; color: #fff; }}
+    .btn-primary:hover {{ background: #1f3f6e; }}
+    .btn-outline {{ background: #fff; color: #162d50; border: 1px solid #c8d1e0 !important; }}
+    .btn-outline:hover {{ background: #eef2fb; }}
+    #row-info {{ margin-left: auto; font-size: 0.78rem; color: #6b7a90; }}
+
+    .statsbar {{
+      background: #fff; border-bottom: 1px solid #dde4ef;
+      padding: 6px 16px; display: flex; gap: 20px;
+      font-size: 0.78rem; color: #5f6b7d;
+      flex-wrap: wrap; flex-shrink: 0;
+    }}
+    .statsbar strong {{ color: #1b2230; }}
+    .statsbar .sep {{ border-left: 1px solid #dde4ef; padding-left: 20px; }}
+
+    #grid-wrap {{ flex: 1; min-height: 0; }}
+    #grid {{ height: 100%; width: 100%; }}
+
+    footer {{
+      text-align: center; padding: 8px;
+      font-size: 0.72rem; color: #9aa5b4;
+      background: #fff; border-top: 1px solid #dde4ef; flex-shrink: 0;
+    }}
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>TIM GL Data &mdash; Data Explorer</h1>
+  <span class="header-meta">
+    {num_files} monthly file{'s' if num_files != 1 else ''}
+    &nbsp;·&nbsp; {num_records:,} aggregated rows{enrichment_badge}
+  </span>
+  <a class="nav-link" href="gl_pivot.html">&larr; Pivot Table</a>
+</header>
+
+<div class="toolbar">
+  <input id="quick-filter" type="search" placeholder="Search all columns&hellip;" autocomplete="off">
+  <button class="btn-outline" id="btn-reset">Reset Filters</button>
+  <button class="btn-primary" id="btn-export">&#x2193;&nbsp;Export CSV</button>
+  <span id="row-info">Loading&hellip;</span>
+</div>
+
+<div class="statsbar" id="statsbar">
+  <span>Loading data&hellip;</span>
+</div>
+
+<div id="grid-wrap">
+  <div id="grid" class="ag-theme-quartz"></div>
+</div>
+
+<footer>
+  Importo = Dare (debit); Imp. Avere = credit; Netto = Importo &minus; Imp.&nbsp;Avere.
+  Amounts in document currency (Div. Soc.). &nbsp;|&nbsp; Built with AG Grid Community.
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/ag-grid-community@31/dist/ag-grid-community.min.js"
+  crossorigin="anonymous"></script>
+
+<script>
+var GL_DATA = {data_json};
+
+var MONTH_ORDER = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec","Adj"];
+
+function monthCmp(a, b) {{
+  var ia = MONTH_ORDER.indexOf(String(a));
+  var ib = MONTH_ORDER.indexOf(String(b));
+  return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+}}
+
+function fmtNum(p) {{
+  if (p.value == null) return '';
+  return p.value.toLocaleString('it-IT', {{minimumFractionDigits: 2, maximumFractionDigits: 2}});
+}}
+
+// ── stats bar ─────────────────────────────────────────────────────────────────
+(function () {{
+  var co = {{}}, mo = {{}}, ac = {{}}, cu = {{}}, owc = {{}}, seg = {{}};
+  var totImp = 0, totAve = 0;
+  GL_DATA.forEach(function (r) {{
+    co[r["Società"]] = 1; mo[r["Mese"]] = 1;
+    ac[r["Conto Co.Ge."]] = 1; cu[r["Div. Soc."]] = 1;
+    if (r["OWC Categoria"]) owc[r["OWC Categoria"]] = 1;
+    if (r["SEGMENTI"])      seg[r["SEGMENTI"]]      = 1;
+    totImp += (r["Importo"]    || 0);
+    totAve += (r["Imp. Avere"] || 0);
+  }});
+  var fmt = function (n) {{ return n.toLocaleString('it-IT', {{maximumFractionDigits: 0}}); }};
+  var h =
+    "<span>Companies: <strong>" + Object.keys(co).length + "</strong></span>" +
+    "<span>GL Accounts: <strong>" + Object.keys(ac).length + "</strong></span>" +
+    "<span>Months: <strong>" + Object.keys(mo).length + "</strong></span>" +
+    "<span>Currencies: <strong>" + Object.keys(cu).join(", ") + "</strong></span>" +
+    "<span>Total Importo: <strong>" + fmt(totImp) + "</strong></span>" +
+    "<span class='sep'>Total Avere: <strong>" + fmt(totAve) + "</strong></span>";
+  if (Object.keys(owc).length)
+    h += "<span class='sep'>OWC Categories: <strong>" + Object.keys(owc).length + "</strong></span>";
+  if (Object.keys(seg).length)
+    h += "<span>Segments: <strong>" + Object.keys(seg).join(", ") + "</strong></span>";
+  document.getElementById('statsbar').innerHTML = h;
+}})();
+
+// ── grid ──────────────────────────────────────────────────────────────────────
+var gridApi;
+
+var gridOptions = {{
+  columnDefs: [
+  {col_defs_js}
+  ],
+  rowData: GL_DATA,
+  defaultColDef: {{
+    sortable: true,
+    resizable: true,
+    floatingFilter: true,
+    minWidth: 60,
+  }},
+  pagination: true,
+  paginationPageSize: 100,
+  paginationPageSizeSelector: [50, 100, 250, 500],
+  animateRows: false,
+  enableCellTextSelection: true,
+  sideBar: {{
+    toolPanels: [
+      {{ id: 'columns', labelDefault: 'Columns', labelKey: 'columns', iconKey: 'columns', toolPanel: 'agColumnsToolPanel' }},
+      {{ id: 'filters', labelDefault: 'Filters',  labelKey: 'filters',  iconKey: 'filter',  toolPanel: 'agFiltersToolPanel'  }},
+    ],
+    defaultToolPanel: '',
+  }},
+  statusBar: {{
+    statusPanels: [
+      {{ statusPanel: 'agTotalAndFilteredRowCountComponent', align: 'left' }},
+    ],
+  }},
+  onGridReady:    function (p) {{ gridApi = p.api; updateRowInfo(); }},
+  onFilterChanged: function ()  {{ updateRowInfo(); }},
+}};
+
+agGrid.createGrid(document.getElementById('grid'), gridOptions);
+
+function updateRowInfo() {{
+  if (!gridApi) return;
+  var shown = gridApi.getDisplayedRowCount();
+  document.getElementById('row-info').textContent =
+    shown.toLocaleString() + ' of ' + GL_DATA.length.toLocaleString() + ' rows';
+}}
+
+document.getElementById('quick-filter').addEventListener('input', function () {{
+  if (gridApi) {{ gridApi.setGridOption('quickFilterText', this.value); updateRowInfo(); }}
+}});
+
+document.getElementById('btn-reset').addEventListener('click', function () {{
+  if (!gridApi) return;
+  gridApi.setFilterModel(null);
+  document.getElementById('quick-filter').value = '';
+  gridApi.setGridOption('quickFilterText', '');
+  updateRowInfo();
+}});
+
+document.getElementById('btn-export').addEventListener('click', function () {{
+  if (gridApi) gridApi.exportDataAsCsv({{ fileName: 'TIM_GL_Explorer.csv' }});
 }});
 </script>
 </body>
@@ -948,7 +1224,18 @@ def main() -> int:
     out.write_text(html_content, encoding="utf-8")
     out_kb = out.stat().st_size / 1024
     print(f"\nWrote: {out}  ({out_kb:,.0f} KB)")
-    print("Open gl_pivot.html in your browser — no server needed.")
+
+    # ── also write the explorer ───────────────────────────────────────────────
+    explorer_content = build_explorer_html(
+        records, len(csv_files), has_owc,
+        has_bank=has_bank,
+        has_segments=has_segs,
+    )
+    explorer_out = out.parent / "gl_explorer.html"
+    explorer_out.write_text(explorer_content, encoding="utf-8")
+    exp_kb = explorer_out.stat().st_size / 1024
+    print(f"Wrote: {explorer_out}  ({exp_kb:,.0f} KB)")
+    print("\nOpen gl_pivot.html or gl_explorer.html in your browser — no server needed.")
     return 0
 
 
