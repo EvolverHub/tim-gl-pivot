@@ -955,6 +955,7 @@ var gridOptions = {{
   {col_defs_js}
   ],
   rowData: GL_DATA,
+  suppressFieldDotNotation: true,
   defaultColDef: {{
     sortable: true,
     resizable: true,
