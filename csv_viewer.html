@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CSV Viewer</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #f0f2f7;
+  --surface: #ffffff;
+  --border: #dde4ef;
+  --header-bg: #162d50;
+  --header-text: #ffffff;
+  --accent: #2563eb;
+  --accent-light: #eff6ff;
+  --text: #1b2230;
+  --text-muted: #6b7280;
+  --row-alt: #f8fafc;
+  --row-hover: #eef2ff;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --mono: "SF Mono", "Fira Code", "Cascadia Code", Consolas, monospace;
+  --row-h: 32px;
+}
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Header ── */
+header {
+  background: var(--header-bg);
+  color: var(--header-text);
+  padding: 16px 28px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+header h1 { font-size: 1.1rem; font-weight: 700; letter-spacing: .01em; }
+header .subtitle { font-size: 0.78rem; opacity: .55; margin-top: 2px; }
+header a {
+  margin-left: auto;
+  color: rgba(255,255,255,.6);
+  font-size: 0.8rem;
+  text-decoration: none;
+}
+header a:hover { color: #fff; }
+
+/* ── Drop zone ── */
+#drop-zone {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 60px 24px;
+  cursor: pointer;
+}
+#drop-zone.over {
+  background: var(--accent-light);
+}
+.drop-icon {
+  width: 64px;
+  height: 64px;
+  border: 2px solid var(--border);
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  transition: border-color .2s, color .2s;
+}
+#drop-zone.over .drop-icon {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.drop-label { font-size: 1rem; font-weight: 600; color: var(--text); }
+.drop-sub { font-size: 0.82rem; color: var(--text-muted); }
+.drop-btn {
+  padding: 8px 20px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-family: var(--font);
+  cursor: pointer;
+  font-weight: 600;
+}
+.drop-btn:hover { background: #1d4ed8; }
+#file-input { display: none; }
+
+/* ── App layout (after load) ── */
+#app {
+  display: none;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Toolbar ── */
+#toolbar {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+#file-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--accent);
+  min-width: 120px;
+}
+#row-count {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+#search {
+  flex: 1;
+  min-width: 200px;
+  max-width: 400px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-family: var(--font);
+  outline: none;
+}
+#search:focus { border-color: var(--accent); }
+#col-filter {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-family: var(--font);
+  background: var(--surface);
+  color: var(--text);
+  outline: none;
+  cursor: pointer;
+}
+#col-filter:focus { border-color: var(--accent); }
+.toolbar-btn {
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-family: var(--font);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.toolbar-btn:hover { background: var(--accent-light); border-color: var(--accent); color: var(--accent); }
+.toolbar-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* ── Main area ── */
+#main-area {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+/* ── Summary panel ── */
+#summary-panel {
+  width: 280px;
+  min-width: 220px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  flex-shrink: 0;
+  display: none;
+  flex-direction: column;
+}
+#summary-panel.visible { display: flex; }
+#summary-panel h2 {
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-muted);
+  padding: 14px 16px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.col-stat {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.col-stat-name {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.col-stat-type {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--accent-light);
+  color: var(--accent);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.stat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 8px;
+}
+.stat-item { font-size: 0.75rem; }
+.stat-label { color: var(--text-muted); }
+.stat-value { font-weight: 600; font-family: var(--mono); font-size: 0.72rem; }
+.mini-bar {
+  margin-top: 6px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+  overflow: hidden;
+}
+.mini-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+}
+
+/* ── Table container ── */
+#table-wrap {
+  flex: 1;
+  overflow: auto;
+  position: relative;
+  background: var(--bg);
+}
+
+/* ── Sticky header row ── */
+#table-head {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--header-bg);
+  color: var(--header-text);
+  display: flex;
+  align-items: stretch;
+  min-width: max-content;
+  width: 100%;
+}
+.th {
+  padding: 0 12px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  user-select: none;
+  white-space: nowrap;
+  height: 36px;
+  border-right: 1px solid rgba(255,255,255,.1);
+  flex-shrink: 0;
+}
+.th:last-child { border-right: none; }
+.th:hover { background: rgba(255,255,255,.08); }
+.th.sorted-asc .sort-icon::after  { content: " ↑"; }
+.th.sorted-desc .sort-icon::after { content: " ↓"; }
+.th:not(.sorted-asc):not(.sorted-desc) .sort-icon::after { content: " ⇅"; opacity: .35; }
+.th-idx {
+  width: 56px;
+  min-width: 56px;
+  justify-content: center;
+  font-size: 0.72rem;
+  cursor: default;
+}
+.th-idx:hover { background: none; }
+
+/* Row number column */
+.row-num {
+  width: 56px;
+  min-width: 56px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-family: var(--mono);
+  flex-shrink: 0;
+  border-right: 1px solid var(--border);
+  padding: 0 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── Virtual scroller ── */
+#virtual-scroller {
+  position: relative;
+  min-width: max-content;
+  width: 100%;
+}
+#virtual-spacer-top { pointer-events: none; }
+#virtual-spacer-bottom { pointer-events: none; }
+.vrow {
+  display: flex;
+  align-items: stretch;
+  height: var(--row-h);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  min-width: max-content;
+  width: 100%;
+}
+.vrow:nth-child(even) { background: var(--row-alt); }
+.vrow:hover { background: var(--row-hover); }
+.vcell {
+  padding: 0 12px;
+  font-size: 0.8rem;
+  font-family: var(--mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  border-right: 1px solid var(--border);
+}
+.vcell:last-child { border-right: none; }
+.vcell.num { text-align: right; justify-content: flex-end; }
+
+/* ── Loading overlay ── */
+#loading {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(22,45,80,.55);
+  z-index: 100;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 16px;
+  color: #fff;
+  font-size: 0.9rem;
+}
+#loading.visible { display: flex; }
+.spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid rgba(255,255,255,.25);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+#progress-text { font-size: 0.82rem; opacity: .8; }
+
+/* ── Status bar ── */
+#statusbar {
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding: 5px 16px;
+  display: none;
+  align-items: center;
+  gap: 16px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+#statusbar.visible { display: flex; }
+#statusbar strong { color: var(--text); }
+</style>
+</head>
+<body>
+
+<!-- Loading overlay -->
+<div id="loading">
+  <div class="spinner"></div>
+  <div id="progress-text">Parsing CSV…</div>
+</div>
+
+<!-- Header -->
+<header>
+  <div>
+    <h1>CSV Viewer</h1>
+    <div class="subtitle">Drag &amp; drop any CSV file to explore it instantly</div>
+  </div>
+  <a href="index.html">← Back to GL Data Hub</a>
+</header>
+
+<!-- Drop zone -->
+<div id="drop-zone">
+  <div class="drop-icon">
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <path d="M4 16l4-4 4 4 4-8 4 8"/>
+      <rect x="3" y="3" width="18" height="18" rx="2"/>
+    </svg>
+  </div>
+  <div class="drop-label">Drop a CSV file here</div>
+  <div class="drop-sub">or click to browse — handles millions of rows</div>
+  <button class="drop-btn" onclick="document.getElementById('file-input').click()">Browse file</button>
+  <input type="file" id="file-input" accept=".csv,.tsv,.txt">
+</div>
+
+<!-- App (shown after file loads) -->
+<div id="app">
+  <!-- Toolbar -->
+  <div id="toolbar">
+    <div>
+      <div id="file-name">—</div>
+      <div id="row-count">—</div>
+    </div>
+    <input type="text" id="search" placeholder="Search all columns…">
+    <select id="col-filter"><option value="">All columns</option></select>
+    <button class="toolbar-btn" id="btn-summary">Summary</button>
+    <button class="toolbar-btn" onclick="document.getElementById('file-input').click()">Load new file</button>
+  </div>
+
+  <!-- Main content -->
+  <div id="main-area">
+    <!-- Summary panel -->
+    <div id="summary-panel">
+      <h2>Column Summary</h2>
+      <div id="summary-content"></div>
+    </div>
+
+    <!-- Table -->
+    <div id="table-wrap">
+      <div id="table-head"></div>
+      <div id="virtual-scroller">
+        <div id="virtual-spacer-top"></div>
+        <div id="rows-container"></div>
+        <div id="virtual-spacer-bottom"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Status bar -->
+<div id="statusbar">
+  Showing <strong id="sb-showing">0</strong> of <strong id="sb-total">0</strong> rows
+  &nbsp;·&nbsp; <strong id="sb-cols">0</strong> columns
+  &nbsp;·&nbsp; <span id="sb-sort">unsorted</span>
+  &nbsp;·&nbsp; <span id="sb-filter">no filter</span>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+let allRows    = [];   // raw parsed rows (array of arrays)
+let headers    = [];   // column names
+let colTypes   = [];   // "number" | "text"
+let colWidths  = [];   // pixel widths
+let filtered   = [];   // indices into allRows after filter/sort
+let sortCol    = -1;
+let sortDir    = 1;    // 1=asc, -1=desc
+let searchTerm = "";
+let searchCol  = "";   // "" = all columns
+
+const ROW_H      = 32;
+const OVERSCAN   = 20;  // extra rows above/below viewport
+const CHUNK      = 50_000; // rows to process per animation frame
+
+// ── DOM refs ───────────────────────────────────────────────────────────────
+const dropZone      = document.getElementById("drop-zone");
+const appEl         = document.getElementById("app");
+const fileInput     = document.getElementById("file-input");
+const fileNameEl    = document.getElementById("file-name");
+const rowCountEl    = document.getElementById("row-count");
+const searchEl      = document.getElementById("search");
+const colFilterEl   = document.getElementById("col-filter");
+const btnSummary    = document.getElementById("btn-summary");
+const summaryPanel  = document.getElementById("summary-panel");
+const summaryContent= document.getElementById("summary-content");
+const tableHead     = document.getElementById("table-head");
+const tableWrap     = document.getElementById("table-wrap");
+const virtualScroll = document.getElementById("virtual-scroller");
+const spacerTop     = document.getElementById("virtual-spacer-top");
+const spacerBot     = document.getElementById("virtual-spacer-bottom");
+const rowsContainer = document.getElementById("rows-container");
+const loadingEl     = document.getElementById("loading");
+const progressEl    = document.getElementById("progress-text");
+const statusbar     = document.getElementById("statusbar");
+
+// ── Drag & drop ───────────────────────────────────────────────────────────
+["dragenter","dragover"].forEach(e =>
+  dropZone.addEventListener(e, ev => { ev.preventDefault(); dropZone.classList.add("over"); }));
+["dragleave","drop"].forEach(e =>
+  dropZone.addEventListener(e, ev => { ev.preventDefault(); dropZone.classList.remove("over"); }));
+dropZone.addEventListener("drop", ev => loadFile(ev.dataTransfer.files[0]));
+fileInput.addEventListener("change", () => loadFile(fileInput.files[0]));
+
+// Also allow drop on the whole app area when a file is already loaded
+document.body.addEventListener("dragover", ev => ev.preventDefault());
+document.body.addEventListener("drop", ev => {
+  ev.preventDefault();
+  if (ev.dataTransfer.files.length) loadFile(ev.dataTransfer.files[0]);
+});
+
+// ── CSV parser (chunked, async) ────────────────────────────────────────────
+function loadFile(file) {
+  if (!file) return;
+  showLoading("Reading file…");
+  const reader = new FileReader();
+  reader.onload = e => parseCSV(e.target.result, file.name);
+  reader.onerror = () => hideLoading();
+  reader.readAsText(file);
+}
+
+function parseCSV(text, name) {
+  progressEl.textContent = "Parsing CSV…";
+  setTimeout(() => {
+    const lines = text.split(/\r?\n/);
+    if (!lines.length) { hideLoading(); return; }
+
+    // Detect delimiter
+    const sample = lines[0];
+    const delim = (sample.split("\t").length > sample.split(",").length) ? "\t" : ",";
+
+    headers = parseRow(sample, delim);
+    allRows = [];
+
+    let i = 1;
+    function chunk() {
+      const end = Math.min(i + CHUNK, lines.length);
+      for (; i < end; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        allRows.push(parseRow(line, delim));
+      }
+      progressEl.textContent = `Parsed ${allRows.length.toLocaleString()} rows…`;
+      if (i < lines.length) {
+        requestAnimationFrame(chunk);
+      } else {
+        finalize(name);
+      }
+    }
+    requestAnimationFrame(chunk);
+  }, 50);
+}
+
+function parseRow(line, delim) {
+  // RFC 4180-ish parser
+  const result = [];
+  let cur = "";
+  let inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (inQ) {
+      if (c === '"' && line[i+1] === '"') { cur += '"'; i++; }
+      else if (c === '"') inQ = false;
+      else cur += c;
+    } else {
+      if (c === '"') inQ = true;
+      else if (c === delim) { result.push(cur); cur = ""; }
+      else cur += c;
+    }
+  }
+  result.push(cur);
+  return result;
+}
+
+function finalize(name) {
+  progressEl.textContent = "Computing statistics…";
+  requestAnimationFrame(() => {
+    detectColTypes();
+    computeColWidths();
+    sortCol = -1;
+    searchTerm = "";
+    searchEl.value = "";
+    buildColFilter();
+    applyFilter();
+    renderHeader();
+    buildSummary();
+    fileNameEl.textContent = name;
+    rowCountEl.textContent = `${allRows.length.toLocaleString()} rows · ${headers.length} columns`;
+    dropZone.style.display = "none";
+    appEl.style.display = "flex";
+    statusbar.classList.add("visible");
+    hideLoading();
+    tableWrap.scrollTop = 0;
+    renderVisible();
+    updateStatusbar();
+  });
+}
+
+// ── Type detection ─────────────────────────────────────────────────────────
+function detectColTypes() {
+  colTypes = headers.map((_, ci) => {
+    const sample = allRows.slice(0, Math.min(500, allRows.length));
+    const numCount = sample.filter(r => r[ci] !== undefined && r[ci].trim() !== "" && !isNaN(+r[ci].replace(/,/g,""))).length;
+    return (numCount / sample.length) > 0.7 ? "number" : "text";
+  });
+}
+
+// ── Column widths ─────────────────────────────────────────────────────────
+function computeColWidths() {
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  ctx.font = "12px SF Mono, Fira Code, Consolas, monospace";
+  colWidths = headers.map((h, ci) => {
+    let max = ctx.measureText(h).width + 60; // header + sort icon
+    const sample = allRows.slice(0, Math.min(200, allRows.length));
+    for (const row of sample) {
+      const w = ctx.measureText(row[ci] || "").width + 28;
+      if (w > max) max = w;
+    }
+    return Math.min(Math.max(max, 80), 280);
+  });
+}
+
+// ── Filter / sort ─────────────────────────────────────────────────────────
+function applyFilter() {
+  const term = searchTerm.toLowerCase();
+  const ci   = searchCol === "" ? -1 : +searchCol;
+
+  if (!term) {
+    filtered = Array.from({length: allRows.length}, (_, i) => i);
+  } else {
+    filtered = [];
+    for (let i = 0; i < allRows.length; i++) {
+      const row = allRows[i];
+      if (ci >= 0) {
+        if ((row[ci] || "").toLowerCase().includes(term)) filtered.push(i);
+      } else {
+        for (let j = 0; j < headers.length; j++) {
+          if ((row[j] || "").toLowerCase().includes(term)) { filtered.push(i); break; }
+        }
+      }
+    }
+  }
+
+  if (sortCol >= 0) {
+    const sc = sortCol, sd = sortDir, isNum = colTypes[sc] === "number";
+    filtered.sort((a, b) => {
+      const av = allRows[a][sc] || "";
+      const bv = allRows[b][sc] || "";
+      if (isNum) {
+        return (parseFloat(av.replace(/,/g,"")) - parseFloat(bv.replace(/,/g,""))) * sd;
+      }
+      return av.localeCompare(bv) * sd;
+    });
+  }
+
+  updateScrollHeight();
+  updateStatusbar();
+}
+
+function buildColFilter() {
+  colFilterEl.innerHTML = '<option value="">All columns</option>';
+  headers.forEach((h, i) => {
+    const opt = document.createElement("option");
+    opt.value = i;
+    opt.textContent = h;
+    colFilterEl.appendChild(opt);
+  });
+}
+
+searchEl.addEventListener("input", () => {
+  searchTerm = searchEl.value;
+  applyFilter();
+  tableWrap.scrollTop = 0;
+  renderVisible();
+});
+colFilterEl.addEventListener("change", () => {
+  searchCol = colFilterEl.value;
+  applyFilter();
+  tableWrap.scrollTop = 0;
+  renderVisible();
+});
+
+// ── Header render ─────────────────────────────────────────────────────────
+function renderHeader() {
+  tableHead.innerHTML = "";
+  // row-num column
+  const idx = document.createElement("div");
+  idx.className = "th th-idx";
+  idx.textContent = "#";
+  tableHead.appendChild(idx);
+
+  headers.forEach((h, ci) => {
+    const th = document.createElement("div");
+    th.className = "th";
+    th.style.width = colWidths[ci] + "px";
+    th.innerHTML = `${h}<span class="sort-icon"></span>`;
+    th.addEventListener("click", () => {
+      if (sortCol === ci) sortDir = -sortDir;
+      else { sortCol = ci; sortDir = 1; }
+      document.querySelectorAll(".th").forEach(t => t.classList.remove("sorted-asc","sorted-desc"));
+      th.classList.add(sortDir === 1 ? "sorted-asc" : "sorted-desc");
+      applyFilter();
+      tableWrap.scrollTop = 0;
+      renderVisible();
+      updateStatusbar();
+    });
+    tableHead.appendChild(th);
+  });
+}
+
+// ── Virtual scrolling ─────────────────────────────────────────────────────
+function updateScrollHeight() {
+  virtualScroll.style.height = (filtered.length * ROW_H) + "px";
+}
+
+let _raf = null;
+tableWrap.addEventListener("scroll", () => {
+  if (_raf) cancelAnimationFrame(_raf);
+  _raf = requestAnimationFrame(renderVisible);
+});
+
+function renderVisible() {
+  const scrollTop  = tableWrap.scrollTop;
+  const viewH      = tableWrap.clientHeight;
+  const startIdx   = Math.max(0, Math.floor(scrollTop / ROW_H) - OVERSCAN);
+  const endIdx     = Math.min(filtered.length, Math.ceil((scrollTop + viewH) / ROW_H) + OVERSCAN);
+
+  spacerTop.style.height = (startIdx * ROW_H) + "px";
+  spacerBot.style.height = ((filtered.length - endIdx) * ROW_H) + "px";
+
+  rowsContainer.innerHTML = "";
+  const frag = document.createDocumentFragment();
+
+  for (let vi = startIdx; vi < endIdx; vi++) {
+    const ri  = filtered[vi];
+    const row = allRows[ri];
+    const div = document.createElement("div");
+    div.className = "vrow";
+
+    // Row number
+    const rn = document.createElement("div");
+    rn.className = "row-num";
+    rn.textContent = (ri + 1).toLocaleString();
+    div.appendChild(rn);
+
+    for (let ci = 0; ci < headers.length; ci++) {
+      const cell = document.createElement("div");
+      cell.className = "vcell" + (colTypes[ci] === "number" ? " num" : "");
+      cell.style.width = colWidths[ci] + "px";
+      const val = row[ci] !== undefined ? row[ci] : "";
+      cell.textContent = val;
+      cell.title = val;
+      div.appendChild(cell);
+    }
+    frag.appendChild(div);
+  }
+  rowsContainer.appendChild(frag);
+}
+
+// ── Summary panel ─────────────────────────────────────────────────────────
+btnSummary.addEventListener("click", () => {
+  summaryPanel.classList.toggle("visible");
+  btnSummary.classList.toggle("active");
+});
+
+function buildSummary() {
+  summaryContent.innerHTML = "";
+  headers.forEach((h, ci) => {
+    const isNum = colTypes[ci] === "number";
+    const vals  = allRows.map(r => r[ci] || "").filter(v => v !== "");
+    const nulls = allRows.length - vals.length;
+
+    const div = document.createElement("div");
+    div.className = "col-stat";
+
+    let statsHTML = "";
+    if (isNum) {
+      const nums = vals.map(v => parseFloat(v.replace(/,/g,""))).filter(n => !isNaN(n));
+      nums.sort((a,b) => a-b);
+      const sum   = nums.reduce((s,v) => s+v, 0);
+      const mean  = sum / nums.length;
+      const min   = nums[0];
+      const max   = nums[nums.length-1];
+      const range = max - min;
+      const q1    = nums[Math.floor(nums.length * .25)];
+      const med   = nums[Math.floor(nums.length * .5)];
+      const q3    = nums[Math.floor(nums.length * .75)];
+
+      const fmt = n => {
+        if (Math.abs(n) >= 1e9) return (n/1e9).toFixed(2) + "B";
+        if (Math.abs(n) >= 1e6) return (n/1e6).toFixed(2) + "M";
+        if (Math.abs(n) >= 1e3) return (n/1e3).toFixed(2) + "K";
+        return n.toFixed(2);
+      };
+
+      const barPct = range > 0 ? Math.round((mean - min) / range * 100) : 50;
+      statsHTML = `
+        <div class="stat-grid">
+          <div class="stat-item"><div class="stat-label">count</div><div class="stat-value">${nums.length.toLocaleString()}</div></div>
+          <div class="stat-item"><div class="stat-label">nulls</div><div class="stat-value">${nulls.toLocaleString()}</div></div>
+          <div class="stat-item"><div class="stat-label">min</div><div class="stat-value">${fmt(min)}</div></div>
+          <div class="stat-item"><div class="stat-label">max</div><div class="stat-value">${fmt(max)}</div></div>
+          <div class="stat-item"><div class="stat-label">mean</div><div class="stat-value">${fmt(mean)}</div></div>
+          <div class="stat-item"><div class="stat-label">median</div><div class="stat-value">${fmt(med)}</div></div>
+          <div class="stat-item"><div class="stat-label">Q1</div><div class="stat-value">${fmt(q1)}</div></div>
+          <div class="stat-item"><div class="stat-label">Q3</div><div class="stat-value">${fmt(q3)}</div></div>
+          <div class="stat-item"><div class="stat-label">sum</div><div class="stat-value">${fmt(sum)}</div></div>
+        </div>
+        <div class="mini-bar" title="mean position in [min, max]">
+          <div class="mini-bar-fill" style="width:${barPct}%"></div>
+        </div>`;
+    } else {
+      const unique = new Set(vals).size;
+      const freq   = {};
+      vals.forEach(v => freq[v] = (freq[v]||0)+1);
+      const top3   = Object.entries(freq).sort((a,b)=>b[1]-a[1]).slice(0,3);
+      statsHTML = `
+        <div class="stat-grid">
+          <div class="stat-item"><div class="stat-label">count</div><div class="stat-value">${vals.length.toLocaleString()}</div></div>
+          <div class="stat-item"><div class="stat-label">nulls</div><div class="stat-value">${nulls.toLocaleString()}</div></div>
+          <div class="stat-item"><div class="stat-label">unique</div><div class="stat-value">${unique.toLocaleString()}</div></div>
+        </div>
+        <div style="margin-top:8px; font-size:.72rem;">
+          <div class="stat-label" style="margin-bottom:4px;">Top values</div>
+          ${top3.map(([v,c]) => `<div style="display:flex;justify-content:space-between;margin-bottom:2px;gap:8px;">
+            <span style="font-family:var(--mono);font-size:.7rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;" title="${escHtml(v)}">${escHtml(v)||'(empty)'}</span>
+            <span style="color:var(--text-muted);white-space:nowrap;">${c.toLocaleString()}</span>
+          </div>`).join("")}
+        </div>`;
+    }
+
+    div.innerHTML = `
+      <div class="col-stat-name" title="${escHtml(h)}">${escHtml(h)}</div>
+      <div class="col-stat-type">${isNum ? "numeric" : "text"}</div>
+      ${statsHTML}`;
+    summaryContent.appendChild(div);
+  });
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+// ── Status bar ─────────────────────────────────────────────────────────────
+function updateStatusbar() {
+  document.getElementById("sb-showing").textContent = filtered.length.toLocaleString();
+  document.getElementById("sb-total").textContent   = allRows.length.toLocaleString();
+  document.getElementById("sb-cols").textContent    = headers.length;
+  document.getElementById("sb-sort").textContent    = sortCol >= 0
+    ? `sorted by ${headers[sortCol]} ${sortDir===1?"↑":"↓"}`
+    : "unsorted";
+  document.getElementById("sb-filter").textContent  = searchTerm
+    ? `filter: "${searchTerm}"${searchCol !== "" ? ` in ${headers[+searchCol]}` : ""}`
+    : "no filter";
+}
+
+// ── Loading helpers ────────────────────────────────────────────────────────
+function showLoading(msg) {
+  progressEl.textContent = msg || "Loading…";
+  loadingEl.classList.add("visible");
+}
+function hideLoading() {
+  loadingEl.classList.remove("visible");
+}
+
+// Resize: recompute visible rows on window resize
+window.addEventListener("resize", () => {
+  if (filtered.length) renderVisible();
+});
+</script>
+</body>
+</html>
