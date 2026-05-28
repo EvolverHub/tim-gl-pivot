@@ -454,15 +454,17 @@ header a:hover { color: #fff; }
 
 <script>
 // ── State ──────────────────────────────────────────────────────────────────
-let allRows    = [];   // raw parsed rows (array of arrays)
-let headers    = [];   // column names
-let colTypes   = [];   // "number" | "text"
-let colWidths  = [];   // pixel widths
-let filtered   = [];   // indices into allRows after filter/sort
-let sortCol    = -1;
-let sortDir    = 1;    // 1=asc, -1=desc
-let searchTerm = "";
-let searchCol  = "";   // "" = all columns
+let allRows     = [];   // raw parsed rows (array of arrays)
+let headers     = [];   // column names
+let colTypes    = [];   // "number" | "text"
+let colWidths   = [];   // pixel widths
+let filtered    = [];   // indices into allRows after filter/sort
+let sortCol     = -1;
+let sortDir     = 1;    // 1=asc, -1=desc
+let searchTerm  = "";
+let searchCol   = "";   // "" = all columns
+let summaryReady = false;
+let colStats    = null; // computed lazily
 
 const ROW_H      = 32;
 const OVERSCAN   = 20;  // extra rows above/below viewport
@@ -568,7 +570,7 @@ function parseRow(line, delim) {
 }
 
 function finalize(name) {
-  progressEl.textContent = "Computing statistics…";
+  progressEl.textContent = "Preparing table…";
   requestAnimationFrame(() => {
     detectColTypes();
     computeColWidths();
@@ -578,7 +580,7 @@ function finalize(name) {
     buildColFilter();
     applyFilter();
     renderHeader();
-    buildSummary();
+    summaryReady = false;  // stats not yet computed
     fileNameEl.textContent = name;
     rowCountEl.textContent = `${allRows.length.toLocaleString()} rows · ${headers.length} columns`;
     dropZone.style.display = "none";
@@ -755,71 +757,132 @@ function renderVisible() {
 
 // ── Summary panel ─────────────────────────────────────────────────────────
 btnSummary.addEventListener("click", () => {
+  const opening = !summaryPanel.classList.contains("visible");
   summaryPanel.classList.toggle("visible");
   btnSummary.classList.toggle("active");
+  if (opening && !summaryReady) buildSummary();
 });
 
-function buildSummary() {
-  summaryContent.innerHTML = "";
-  headers.forEach((h, ci) => {
-    const isNum = colTypes[ci] === "number";
-    const vals  = allRows.map(r => r[ci] || "").filter(v => v !== "");
-    const nulls = allRows.length - vals.length;
+// Stats from a random sample — fast regardless of file size.
+// Exact: count, nulls, min, max, sum, mean, unique.
+// Approximate (sample): median, Q1, Q3, top values.
+const SAMPLE_SIZE = 100_000;
 
+function buildSummary() {
+  const n  = allRows.length;
+  const nc = headers.length;
+  const isSampled = n > SAMPLE_SIZE;
+
+  // Pick sample indices (uniform random without replacement via Fisher-Yates partial shuffle)
+  let indices;
+  if (isSampled) {
+    const pool = Array.from({length: n}, (_, i) => i);
+    for (let i = 0; i < SAMPLE_SIZE; i++) {
+      const j = i + Math.floor(Math.random() * (n - i));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    indices = pool.slice(0, SAMPLE_SIZE);
+  } else {
+    indices = Array.from({length: n}, (_, i) => i);
+  }
+
+  // Single pass through the sample for all columns simultaneously
+  const acc = headers.map((_, ci) => ({
+    isNum : colTypes[ci] === "number",
+    count : 0, nulls : 0, sum : 0,
+    min   : Infinity, max : -Infinity,
+    nums  : [],
+    freq  : {},
+  }));
+
+  for (let si = 0; si < indices.length; si++) {
+    const row = allRows[indices[si]];
+    for (let ci = 0; ci < nc; ci++) {
+      const s = acc[ci];
+      const v = (row[ci] || "").trim();
+      if (!v) { s.nulls++; continue; }
+      s.count++;
+      if (s.isNum) {
+        const num = parseFloat(v.replace(/,/g, ""));
+        if (isNaN(num)) continue;
+        s.sum += num;
+        if (num < s.min) s.min = num;
+        if (num > s.max) s.max = num;
+        s.nums.push(num);
+      } else {
+        s.freq[v] = (s.freq[v] || 0) + 1;
+      }
+    }
+  }
+
+  // Scale nulls/count to full dataset if sampled
+  const scale = isSampled ? n / indices.length : 1;
+
+  summaryContent.innerHTML = "";
+  const fmt = v => {
+    if (!isFinite(v)) return "—";
+    if (Math.abs(v) >= 1e9) return (v / 1e9).toFixed(2) + "B";
+    if (Math.abs(v) >= 1e6) return (v / 1e6).toFixed(2) + "M";
+    if (Math.abs(v) >= 1e3) return (v / 1e3).toFixed(2) + "K";
+    return v % 1 === 0 ? v.toLocaleString() : v.toFixed(2);
+  };
+
+  if (isSampled) {
+    const note = document.createElement("div");
+    note.style.cssText = "padding:8px 16px;font-size:.72rem;color:var(--text-muted);border-bottom:1px solid var(--border);";
+    note.textContent = `Stats based on ${SAMPLE_SIZE.toLocaleString()}-row sample`;
+    summaryContent.appendChild(note);
+  }
+
+  headers.forEach((h, ci) => {
+    const s = acc[ci];
     const div = document.createElement("div");
     div.className = "col-stat";
-
     let statsHTML = "";
-    if (isNum) {
-      const nums = vals.map(v => parseFloat(v.replace(/,/g,""))).filter(n => !isNaN(n));
-      nums.sort((a,b) => a-b);
-      const sum   = nums.reduce((s,v) => s+v, 0);
-      const mean  = sum / nums.length;
-      const min   = nums[0];
-      const max   = nums[nums.length-1];
-      const range = max - min;
-      const q1    = nums[Math.floor(nums.length * .25)];
-      const med   = nums[Math.floor(nums.length * .5)];
-      const q3    = nums[Math.floor(nums.length * .75)];
 
-      const fmt = n => {
-        if (Math.abs(n) >= 1e9) return (n/1e9).toFixed(2) + "B";
-        if (Math.abs(n) >= 1e6) return (n/1e6).toFixed(2) + "M";
-        if (Math.abs(n) >= 1e3) return (n/1e3).toFixed(2) + "K";
-        return n.toFixed(2);
-      };
-
-      const barPct = range > 0 ? Math.round((mean - min) / range * 100) : 50;
+    if (s.isNum) {
+      s.nums.sort((a, b) => a - b);
+      const len   = s.nums.length;
+      const mean  = len ? s.sum / len : 0;
+      const q1    = s.nums[Math.floor(len * .25)] ?? s.min;
+      const med   = s.nums[Math.floor(len * .50)] ?? mean;
+      const q3    = s.nums[Math.floor(len * .75)] ?? s.max;
+      const range = s.max - s.min;
+      const barPct = range > 0 ? Math.round((mean - s.min) / range * 100) : 50;
+      const estCount = Math.round(s.count * scale);
+      const estNulls = Math.round(s.nulls * scale);
+      const estSum   = s.sum * scale;
       statsHTML = `
         <div class="stat-grid">
-          <div class="stat-item"><div class="stat-label">count</div><div class="stat-value">${nums.length.toLocaleString()}</div></div>
-          <div class="stat-item"><div class="stat-label">nulls</div><div class="stat-value">${nulls.toLocaleString()}</div></div>
-          <div class="stat-item"><div class="stat-label">min</div><div class="stat-value">${fmt(min)}</div></div>
-          <div class="stat-item"><div class="stat-label">max</div><div class="stat-value">${fmt(max)}</div></div>
+          <div class="stat-item"><div class="stat-label">count</div><div class="stat-value">${estCount.toLocaleString()}</div></div>
+          <div class="stat-item"><div class="stat-label">nulls</div><div class="stat-value">${estNulls.toLocaleString()}</div></div>
+          <div class="stat-item"><div class="stat-label">min</div><div class="stat-value">${fmt(s.min)}</div></div>
+          <div class="stat-item"><div class="stat-label">max</div><div class="stat-value">${fmt(s.max)}</div></div>
           <div class="stat-item"><div class="stat-label">mean</div><div class="stat-value">${fmt(mean)}</div></div>
           <div class="stat-item"><div class="stat-label">median</div><div class="stat-value">${fmt(med)}</div></div>
           <div class="stat-item"><div class="stat-label">Q1</div><div class="stat-value">${fmt(q1)}</div></div>
           <div class="stat-item"><div class="stat-label">Q3</div><div class="stat-value">${fmt(q3)}</div></div>
-          <div class="stat-item"><div class="stat-label">sum</div><div class="stat-value">${fmt(sum)}</div></div>
+          <div class="stat-item"><div class="stat-label">sum</div><div class="stat-value">${fmt(estSum)}</div></div>
         </div>
-        <div class="mini-bar" title="mean position in [min, max]">
+        <div class="mini-bar" title="mean position within [min, max]">
           <div class="mini-bar-fill" style="width:${barPct}%"></div>
         </div>`;
     } else {
-      const unique = new Set(vals).size;
-      const freq   = {};
-      vals.forEach(v => freq[v] = (freq[v]||0)+1);
-      const top3   = Object.entries(freq).sort((a,b)=>b[1]-a[1]).slice(0,3);
+      const entries = Object.entries(s.freq);
+      const unique  = entries.length;
+      const top3    = entries.sort((a, b) => b[1] - a[1]).slice(0, 3);
+      const estCount = Math.round(s.count * scale);
+      const estNulls = Math.round(s.nulls * scale);
       statsHTML = `
         <div class="stat-grid">
-          <div class="stat-item"><div class="stat-label">count</div><div class="stat-value">${vals.length.toLocaleString()}</div></div>
-          <div class="stat-item"><div class="stat-label">nulls</div><div class="stat-value">${nulls.toLocaleString()}</div></div>
-          <div class="stat-item"><div class="stat-label">unique</div><div class="stat-value">${unique.toLocaleString()}</div></div>
+          <div class="stat-item"><div class="stat-label">count</div><div class="stat-value">${estCount.toLocaleString()}</div></div>
+          <div class="stat-item"><div class="stat-label">nulls</div><div class="stat-value">${estNulls.toLocaleString()}</div></div>
+          <div class="stat-item"><div class="stat-label">unique</div><div class="stat-value">${unique.toLocaleString()}${isSampled ? "+" : ""}</div></div>
         </div>
-        <div style="margin-top:8px; font-size:.72rem;">
+        <div style="margin-top:8px;font-size:.72rem;">
           <div class="stat-label" style="margin-bottom:4px;">Top values</div>
-          ${top3.map(([v,c]) => `<div style="display:flex;justify-content:space-between;margin-bottom:2px;gap:8px;">
-            <span style="font-family:var(--mono);font-size:.7rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;" title="${escHtml(v)}">${escHtml(v)||'(empty)'}</span>
+          ${top3.map(([v, c]) => `<div style="display:flex;justify-content:space-between;margin-bottom:2px;gap:8px;">
+            <span style="font-family:var(--mono);font-size:.7rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;" title="${escHtml(v)}">${escHtml(v) || "(empty)"}</span>
             <span style="color:var(--text-muted);white-space:nowrap;">${c.toLocaleString()}</span>
           </div>`).join("")}
         </div>`;
@@ -827,10 +890,12 @@ function buildSummary() {
 
     div.innerHTML = `
       <div class="col-stat-name" title="${escHtml(h)}">${escHtml(h)}</div>
-      <div class="col-stat-type">${isNum ? "numeric" : "text"}</div>
+      <div class="col-stat-type">${s.isNum ? "numeric" : "text"}</div>
       ${statsHTML}`;
     summaryContent.appendChild(div);
   });
+
+  summaryReady = true;
 }
 
 function escHtml(s) {
