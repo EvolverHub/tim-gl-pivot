@@ -15,15 +15,11 @@
   --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
 }
 body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column}
-
-/* header */
 header{background:var(--navy);color:#fff;padding:14px 24px;display:flex;align-items:center;gap:12px}
 header h1{font-size:1rem;font-weight:700}
 .sub{font-size:.75rem;opacity:.5;margin-top:2px}
 header a{margin-left:auto;color:rgba(255,255,255,.55);font-size:.78rem;text-decoration:none}
 header a:hover{color:#fff}
-
-/* drop zone */
 #drop-zone{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:60px 24px;cursor:pointer;transition:background .15s}
 #drop-zone.over{background:var(--accent-bg)}
 .di{width:60px;height:60px;border:2px solid var(--border);border-radius:14px;display:flex;align-items:center;justify-content:center;color:var(--muted);transition:.2s}
@@ -33,18 +29,13 @@ header a:hover{color:#fff}
 .dbtn{padding:7px 18px;background:var(--accent);color:#fff;border:none;border-radius:6px;font:600 .82rem var(--sans);cursor:pointer}
 .dbtn:hover{background:#1d4ed8}
 #fi{display:none}
-
-/* loading overlay */
-#overlay{display:none;position:fixed;inset:0;z-index:100;background:rgba(22,45,80,.65);align-items:center;justify-content:center;flex-direction:column;gap:14px;color:#fff}
+#overlay{display:none;position:fixed;inset:0;z-index:100;background:rgba(22,45,80,.7);align-items:center;justify-content:center;flex-direction:column;gap:14px;color:#fff;text-align:center}
 #overlay.on{display:flex}
-.spin{width:34px;height:34px;border:3px solid rgba(255,255,255,.25);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite}
+.spin{width:36px;height:36px;border:3px solid rgba(255,255,255,.25);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-#pt{font-size:.85rem;opacity:.9}
-
-/* app shell */
+#pt{font-size:.9rem;font-weight:600}
+#pt2{font-size:.75rem;opacity:.7}
 #app{display:none;flex:1;flex-direction:column;overflow:hidden}
-
-/* toolbar */
 #toolbar{background:var(--surface);border-bottom:1px solid var(--border);padding:8px 14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 #fnm{font-weight:700;font-size:.88rem;color:var(--accent)}
 #fmeta{font-size:.72rem;color:var(--muted)}
@@ -54,11 +45,7 @@ header a:hover{color:#fff}
 .tbtn{padding:5px 12px;border:1px solid var(--border);border-radius:6px;font:.8rem var(--sans);background:var(--surface);cursor:pointer;white-space:nowrap}
 .tbtn:hover{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
 .tbtn.on{background:var(--accent);color:#fff;border-color:var(--accent)}
-
-/* layout */
 #main{flex:1;display:flex;overflow:hidden}
-
-/* summary sidebar */
 #sb{width:270px;min-width:200px;background:var(--surface);border-right:1px solid var(--border);overflow-y:auto;display:none;flex-direction:column;flex-shrink:0}
 #sb.on{display:flex}
 #sb h2{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);padding:12px 14px 8px;border-bottom:1px solid var(--border)}
@@ -70,8 +57,6 @@ header a:hover{color:#fff}
 .si .val{font:600 .68rem var(--mono)}
 .mb{margin-top:5px;height:3px;background:var(--border);border-radius:2px;overflow:hidden}
 .mbf{height:100%;background:var(--accent)}
-
-/* table */
 #tw{flex:1;overflow:auto;position:relative;background:var(--bg)}
 #thead{position:sticky;top:0;z-index:10;background:var(--navy);color:#fff;display:flex;align-items:stretch;min-width:max-content}
 .th{padding:0 10px;font-size:.72rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;gap:4px;white-space:nowrap;height:34px;border-right:1px solid rgba(255,255,255,.1);flex-shrink:0;user-select:none}
@@ -89,20 +74,20 @@ header a:hover{color:#fff}
 .vc{padding:0 10px;font:.78rem var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0;display:flex;align-items:center;border-right:1px solid var(--border)}
 .vc:last-child{border-right:none}
 .vc.n{justify-content:flex-end}
-
-/* status bar */
 #sbar{background:var(--surface);border-top:1px solid var(--border);padding:4px 14px;display:none;font-size:.72rem;color:var(--muted);gap:14px;align-items:center}
 #sbar.on{display:flex}
 #sbar strong{color:var(--text)}
-
-/* filter progress pill */
 #fpill{display:none;position:absolute;bottom:12px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;font-size:.75rem;padding:5px 14px;border-radius:20px;white-space:nowrap;z-index:20}
 #fpill.on{display:block}
 </style>
 </head>
 <body>
 
-<div id="overlay"><div class="spin"></div><div id="pt">Reading file…</div></div>
+<div id="overlay">
+  <div class="spin"></div>
+  <div id="pt">Reading file…</div>
+  <div id="pt2"></div>
+</div>
 
 <header>
   <div><h1>CSV Viewer</h1><div class="sub">Drop any CSV · instant display · no row limit</div></div>
@@ -114,11 +99,12 @@ header a:hover{color:#fff}
     <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
       <polyline points="14 2 14 8 20 8"/>
-      <line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/>
+      <line x1="12" y1="18" x2="12" y2="12"/>
+      <line x1="9" y1="15" x2="15" y2="15"/>
     </svg>
   </div>
   <div class="dl">Drop a CSV file here</div>
-  <div class="ds">Instant table · works on millions of rows · fully offline</div>
+  <div class="ds">Instant table · millions of rows · works offline</div>
   <button class="dbtn" onclick="document.getElementById('fi').click()">Browse file</button>
   <input type="file" id="fi" accept=".csv,.tsv,.txt">
 </div>
@@ -144,6 +130,7 @@ header a:hover{color:#fff}
     </div>
   </div>
 </div>
+
 <div id="sbar">
   Showing <strong id="s1">0</strong> of <strong id="s2">0</strong> rows
   &nbsp;·&nbsp; <strong id="s3">0</strong> cols
@@ -152,38 +139,31 @@ header a:hover{color:#fff}
 </div>
 
 <script>
-// ═══════════════════════════════════════════════════════════════════════
-// Architecture: store raw text + line byte offsets.
-// Parse ONLY the ~60 visible rows on demand — never loads all rows.
-// For 1.3M rows: reads in ~2s, table appears instantly after.
-// ═══════════════════════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────────────
+// Key insight: keep the raw file text + an array of line-start positions.
+// Parse ONLY the rows currently visible (~60 at a time). Never parse all.
+// Line indexing uses String.indexOf('\n') which runs at native C++ speed.
+// ─────────────────────────────────────────────────────────────────────
 
-"use strict";
+const g = id => document.getElementById(id);
 
-// ── State ──────────────────────────────────────────────────────
-let rawText   = "";      // entire file as one string
-let offsets   = null;    // Uint32Array: char position of each line start
+// ── State ────────────────────────────────────────────────────────────
+let raw       = "";      // full file text
+let linePos   = [];      // linePos[i] = char index where line i starts
 let headers   = [];
 let delim     = ",";
-let totalRows = 0;       // excludes header line
+let totalRows = 0;
 let colTypes  = [];      // "num" | "str"
-let colW      = [];      // px
+let colW      = [];
+let dispIdx   = null;    // null = all rows; array = filtered/sorted subset
+let sortC = -1, sortD = 1;
+let filterStr = "", filterCol = "";
+let sumBuilt = false, filterAbort = false;
 
-let dispIdx   = null;    // null = show all rows in order; Int32Array/array = filtered/sorted
-let sortC     = -1;
-let sortD     = 1;
-let filterStr = "";
-let filterCol = "";
-let sumBuilt  = false;
-let filterAbort = false;
+const ROW_H = 32, OVER = 30, SAMPLE = 50_000;
 
-const ROW_H  = 32;
-const OVER   = 30;       // rows to render beyond viewport
-const SAMPLE = 80_000;   // rows for summary stats
-
-// ── DOM ───────────────────────────────────────────────────────
-const g  = id => document.getElementById(id);
-const overlay = g("overlay"), pt = g("pt");
+// ── DOM ──────────────────────────────────────────────────────────────
+const overlay = g("overlay"), pt = g("pt"), pt2 = g("pt2");
 const dropZone = g("drop-zone"), fi = g("fi"), appEl = g("app");
 const srch = g("srch"), csel = g("csel"), bsum = g("bsum");
 const sidebar = g("sb"), sbb = g("sbb");
@@ -191,125 +171,136 @@ const tw = g("tw"), thead = g("thead");
 const vs = g("vs"), spt = g("spt"), rowsEl = g("rowsEl"), spb = g("spb");
 const sbar = g("sbar"), fpill = g("fpill");
 
-// ── Drop / pick ───────────────────────────────────────────────
-["dragenter","dragover"].forEach(e => dropZone.addEventListener(e, ev => { ev.preventDefault(); dropZone.classList.add("over"); }));
-["dragleave","drop"].forEach(e     => dropZone.addEventListener(e, ev => { ev.preventDefault(); dropZone.classList.remove("over"); }));
-dropZone.addEventListener("drop",  ev => { const f = ev.dataTransfer.files[0]; if (f) load(f); });
+// ── File drop / pick ─────────────────────────────────────────────────
+["dragenter","dragover"].forEach(e =>
+  dropZone.addEventListener(e, ev => { ev.preventDefault(); dropZone.classList.add("over"); }));
+["dragleave","drop"].forEach(e =>
+  dropZone.addEventListener(e, ev => { ev.preventDefault(); dropZone.classList.remove("over"); }));
+dropZone.addEventListener("drop", ev => { const f = ev.dataTransfer.files[0]; if (f) load(f); });
 fi.addEventListener("change", () => { if (fi.files[0]) load(fi.files[0]); });
 document.body.addEventListener("dragover", ev => ev.preventDefault());
-document.body.addEventListener("drop", ev => { ev.preventDefault(); const f = ev.dataTransfer.files[0]; if (f) load(f); });
+document.body.addEventListener("drop", ev => {
+  ev.preventDefault();
+  const f = ev.dataTransfer.files[0]; if (f) load(f);
+});
 
-// ── Load: read entire file as text ────────────────────────────
+// ── Step 1: read file ────────────────────────────────────────────────
 function load(file) {
-  pt.textContent = "Reading file…";
-  overlay.classList.add("on");
   filterAbort = true;
+  pt.textContent = "Reading file…";
+  pt2.textContent = `${(file.size / 1e6).toFixed(1)} MB`;
+  overlay.classList.add("on");
 
   const reader = new FileReader();
-  reader.onload = e => {
-    rawText = e.target.result;
+  reader.onerror = () => { overlay.classList.remove("on"); alert("Could not read file."); };
+  reader.onload  = e => {
+    raw = e.target.result;
     pt.textContent = "Indexing lines…";
-    // Yield so the UI updates, then index
-    setTimeout(buildIndex.bind(null, file.name), 0);
+    pt2.textContent = "";
+    // Yield one frame so the overlay message updates, then index
+    requestAnimationFrame(() => setTimeout(index.bind(null, file.name), 0));
   };
   reader.readAsText(file);
 }
 
-// ── Build line index: one pass, O(n chars) ────────────────────
-// After this, rawText + offsets is everything we need.
-function buildIndex(name) {
-  // Single pass: pre-allocate generously (avg line ~50 chars), fill, then trim.
-  const maxLines = Math.ceil(rawText.length / 40) + 2;
-  const arr = new Uint32Array(maxLines);
-  arr[0] = 0;
-  let oi = 1;
-  for (let i = 0; i < rawText.length; i++) {
-    if (rawText.charCodeAt(i) === 10) arr[oi++] = i + 1;
+// ── Step 2: build line index ─────────────────────────────────────────
+// Uses String.indexOf — runs in native C++ (~50 ms for 80 MB).
+// No charCodeAt loop, no browser-unresponsive warning.
+function index(name) {
+  try {
+    linePos = [0];
+    let p = raw.indexOf("\n");
+    while (p !== -1) {
+      linePos.push(p + 1);
+      p = raw.indexOf("\n", p + 1);
+    }
+    // Remove trailing ghost line if file ends with \n
+    if (linePos.length > 1 && linePos[linePos.length - 1] >= raw.length) {
+      linePos.pop();
+    }
+
+    // Detect delimiter from first line
+    const firstLine = raw.slice(0, linePos[1] || raw.length);
+    delim = firstLine.split("\t").length > firstLine.split(",").length ? "\t" : ",";
+
+    headers   = parseLine(0).map(h => h.trim());
+    totalRows = linePos.length - 1;
+
+    detectTypes();
+    measureCols();
+    buildDropdown();
+    buildHeader();
+
+    sortC = -1; sortD = 1; filterStr = ""; filterCol = "";
+    srch.value = ""; dispIdx = null; sumBuilt = false; filterAbort = false;
+
+    g("fnm").textContent   = name;
+    g("fmeta").textContent = `${totalRows.toLocaleString()} rows · ${headers.length} columns`;
+
+    dropZone.style.display = "none";
+    appEl.style.display    = "flex";
+    sbar.classList.add("on");
+    overlay.classList.remove("on");
+
+    tw.scrollTop = 0;
+    setHeight();
+    render();
+    updateStatus();
+  } catch(err) {
+    overlay.classList.remove("on");
+    alert("Error loading file: " + err.message);
+    console.error(err);
   }
-  // Drop trailing empty entry if file ends with newline
-  while (oi > 1 && arr[oi - 1] >= rawText.length) oi--;
-
-  offsets   = arr.subarray(0, oi);
-  // Detect delimiter from header line before any parsing
-  const headerLine = rawText.slice(0, offsets.length > 1 ? offsets[1] : rawText.length);
-  delim = headerLine.split("\t").length > headerLine.split(",").length ? "\t" : ",";
-  headers   = getLineParsed(0).map(h => h.trim());
-  totalRows = offsets.length - 1;  // line 0 = header
-
-  detectTypes();
-  measureCols();
-  buildColDropdown();
-  buildTableHeader();
-
-  sortC = -1; sortD = 1; filterStr = ""; filterCol = "";
-  srch.value = ""; dispIdx = null; sumBuilt = false; filterAbort = false;
-
-  g("fnm").textContent   = name;
-  g("fmeta").textContent = `${totalRows.toLocaleString()} rows · ${headers.length} columns`;
-
-  dropZone.style.display = "none";
-  appEl.style.display    = "flex";
-  sbar.classList.add("on");
-  overlay.classList.remove("on");
-
-  tw.scrollTop = 0;
-  setVsHeight();
-  renderVisible();
-  updateStatus();
 }
 
-// ── Line parsing: get parsed cells for line i (0 = header) ───
-function getLineParsed(lineIdx) {
-  const start = offsets[lineIdx];
-  let end = lineIdx + 1 < offsets.length ? offsets[lineIdx + 1] - 1 : rawText.length;
-  // Strip \r
-  if (rawText.charCodeAt(end - 1) === 13) end--;
-  return splitCSV(rawText.slice(start, end));
+// ── Line / row accessors ─────────────────────────────────────────────
+function parseLine(li) {
+  const start = linePos[li];
+  let end = li + 1 < linePos.length ? linePos[li + 1] - 1 : raw.length;
+  // strip \r
+  if (end > start && raw.charCodeAt(end - 1) === 13) end--;
+  return splitLine(raw.slice(start, end));
 }
 
-// Data row: ri is 0-based (0 = first data row, skipping header)
-function getRow(ri) { return getLineParsed(ri + 1); }
+function getRow(ri) { return parseLine(ri + 1); }  // ri=0 → first data row
 
-// RFC-4180 split
-function splitCSV(line) {
-  const res = []; let cur = "", inQ = false;
+function splitLine(line) {
+  const out = []; let cur = "", q = false;
   for (let i = 0; i < line.length; i++) {
     const c = line[i];
-    if (inQ) {
-      if (c === '"' && line[i + 1] === '"') { cur += '"'; i++; }
-      else if (c === '"') inQ = false;
+    if (q) {
+      if (c === '"' && line[i+1] === '"') { cur += '"'; i++; }
+      else if (c === '"') q = false;
       else cur += c;
     } else {
-      if (c === '"') inQ = true;
-      else if (c === delim) { res.push(cur); cur = ""; }
+      if (c === '"') q = true;
+      else if (c === delim) { out.push(cur); cur = ""; }
       else cur += c;
     }
   }
-  res.push(cur);
-  return res;
+  out.push(cur);
+  return out;
 }
 
-// ── Type detection (200-row sample) ──────────────────────────
+// ── Type detection ───────────────────────────────────────────────────
 function detectTypes() {
-  const n = Math.min(200, totalRows);
-  const first = rawText.slice(0, offsets[1] || rawText.length);
-  delim = first.split("\t").length > first.split(",").length ? "\t" : ",";
+  const n = Math.min(300, totalRows);
   colTypes = headers.map((_, ci) => {
     let hits = 0;
     for (let ri = 0; ri < n; ri++) {
       const v = (getRow(ri)[ci] || "").trim();
-      if (v !== "" && !isNaN(+v.replace(/,/g, ""))) hits++;
+      if (v && !isNaN(+v.replace(/,/g, ""))) hits++;
     }
     return hits / n > 0.7 ? "num" : "str";
   });
 }
 
-// ── Column widths (100-row sample) ────────────────────────────
+// ── Column widths ────────────────────────────────────────────────────
 function measureCols() {
   const cv = document.createElement("canvas");
   const ctx = cv.getContext("2d");
   ctx.font = "12px SF Mono,Fira Code,Consolas,monospace";
-  const n = Math.min(100, totalRows);
+  const n = Math.min(150, totalRows);
   colW = headers.map((h, ci) => {
     let m = ctx.measureText(h).width + 56;
     for (let ri = 0; ri < n; ri++) {
@@ -320,8 +311,8 @@ function measureCols() {
   });
 }
 
-// ── Column dropdown ───────────────────────────────────────────
-function buildColDropdown() {
+// ── Column dropdown ──────────────────────────────────────────────────
+function buildDropdown() {
   csel.innerHTML = '<option value="">All columns</option>';
   headers.forEach((h, i) => {
     const o = document.createElement("option");
@@ -329,13 +320,12 @@ function buildColDropdown() {
   });
 }
 
-// ── Table header ──────────────────────────────────────────────
-function buildTableHeader() {
+// ── Table header ─────────────────────────────────────────────────────
+function buildHeader() {
   thead.innerHTML = "";
   const rn = document.createElement("div");
   rn.className = "th th-rn"; rn.textContent = "#";
   thead.appendChild(rn);
-
   headers.forEach((h, ci) => {
     const th = document.createElement("div");
     th.className = "th"; th.style.width = colW[ci] + "px";
@@ -344,28 +334,27 @@ function buildTableHeader() {
       if (sortC === ci) sortD = -sortD; else { sortC = ci; sortD = 1; }
       thead.querySelectorAll(".th").forEach(t => t.classList.remove("asc","desc"));
       th.classList.add(sortD === 1 ? "asc" : "desc");
-      applySort();
-      tw.scrollTop = 0; renderVisible(); updateStatus();
+      applySort(); tw.scrollTop = 0; render(); updateStatus();
     });
     thead.appendChild(th);
   });
 }
 
-// ── Virtual scroll height ─────────────────────────────────────
-function setVsHeight() {
-  const n = dispIdx === null ? totalRows : dispIdx.length;
-  vs.style.height = (n * ROW_H) + "px";
+// ── Virtual scroll ───────────────────────────────────────────────────
+function setHeight() {
+  vs.style.height = ((dispIdx === null ? totalRows : dispIdx.length) * ROW_H) + "px";
 }
 
-// ── Virtual renderer — parses only visible rows on demand ─────
 let _raf = null;
-tw.addEventListener("scroll", () => { if (_raf) cancelAnimationFrame(_raf); _raf = requestAnimationFrame(renderVisible); });
-window.addEventListener("resize", () => { if (totalRows) renderVisible(); });
+tw.addEventListener("scroll", () => {
+  if (_raf) cancelAnimationFrame(_raf);
+  _raf = requestAnimationFrame(render);
+});
+window.addEventListener("resize", () => { if (totalRows) render(); });
 
-function renderVisible() {
+function render() {
   const total = dispIdx === null ? totalRows : dispIdx.length;
-  const st    = tw.scrollTop;
-  const vh    = tw.clientHeight;
+  const st    = tw.scrollTop, vh = tw.clientHeight;
   const from  = Math.max(0, Math.floor(st / ROW_H) - OVER);
   const to    = Math.min(total, Math.ceil((st + vh) / ROW_H) + OVER);
 
@@ -375,13 +364,12 @@ function renderVisible() {
   const frag = document.createDocumentFragment();
   for (let vi = from; vi < to; vi++) {
     const ri  = dispIdx === null ? vi : dispIdx[vi];
-    const row = getRow(ri);   // ← parses only this one line, super fast
-
+    const row = getRow(ri);
     const div = document.createElement("div"); div.className = "vrow";
 
-    const rnEl = document.createElement("div");
-    rnEl.className = "rn"; rnEl.textContent = (ri + 1).toLocaleString();
-    div.appendChild(rnEl);
+    const rn = document.createElement("div");
+    rn.className = "rn"; rn.textContent = (ri + 1).toLocaleString();
+    div.appendChild(rn);
 
     for (let ci = 0; ci < headers.length; ci++) {
       const c = document.createElement("div");
@@ -393,98 +381,72 @@ function renderVisible() {
     }
     frag.appendChild(div);
   }
-  rowsEl.innerHTML = "";
-  rowsEl.appendChild(frag);
+  rowsEl.innerHTML = ""; rowsEl.appendChild(frag);
 }
 
-// ── Search ────────────────────────────────────────────────────
-let _searchTimer = null;
+// ── Search ───────────────────────────────────────────────────────────
+let _st = null;
 srch.addEventListener("input", () => {
   filterStr = srch.value;
-  clearTimeout(_searchTimer);
-  _searchTimer = setTimeout(applyFilterAsync, 300);
+  clearTimeout(_st); _st = setTimeout(doFilter, 300);
 });
-csel.addEventListener("change", () => {
-  filterCol = csel.value; applyFilterAsync();
-});
+csel.addEventListener("change", () => { filterCol = csel.value; doFilter(); });
 
-function applyFilterAsync() {
+function doFilter() {
   filterAbort = true;
   setTimeout(() => {
     filterAbort = false;
     if (!filterStr) {
-      dispIdx = sortC >= 0 ? buildAllSorted() : null;
-      setVsHeight(); tw.scrollTop = 0; renderVisible(); updateStatus();
-      fpill.classList.remove("on");
-      return;
+      dispIdx = sortC >= 0 ? makeAllSorted() : null;
+      setHeight(); tw.scrollTop = 0; render(); updateStatus();
+      fpill.classList.remove("on"); return;
     }
-    fpill.textContent = "Filtering 0%";
-    fpill.classList.add("on");
-
-    const term   = filterStr.toLowerCase();
-    const fc     = filterCol === "" ? -1 : +filterCol;
-    const result = [];
-    let ri = 0;
-    const STEP = 15_000;
-
+    fpill.textContent = "Filtering 0%"; fpill.classList.add("on");
+    const term = filterStr.toLowerCase();
+    const fc   = filterCol === "" ? -1 : +filterCol;
+    const res  = []; let ri = 0; const STEP = 15_000;
     function step() {
       if (filterAbort) { fpill.classList.remove("on"); return; }
       const end = Math.min(ri + STEP, totalRows);
       for (; ri < end; ri++) {
         const row = getRow(ri);
-        let hit = false;
-        if (fc >= 0) {
-          hit = (row[fc] || "").toLowerCase().includes(term);
-        } else {
-          for (let j = 0; j < headers.length; j++) {
-            if ((row[j] || "").toLowerCase().includes(term)) { hit = true; break; }
-          }
-        }
-        if (hit) result.push(ri);
+        let hit = fc >= 0
+          ? (row[fc] || "").toLowerCase().includes(term)
+          : row.some(v => (v || "").toLowerCase().includes(term));
+        if (hit) res.push(ri);
       }
       fpill.textContent = `Filtering ${Math.round(ri / totalRows * 100)}%`;
-      if (ri < totalRows) {
-        requestAnimationFrame(step);
-      } else {
-        if (sortC >= 0) sortArr(result);
-        dispIdx = result;
-        setVsHeight(); tw.scrollTop = 0; renderVisible(); updateStatus();
-        fpill.classList.remove("on");
-      }
+      ri < totalRows ? requestAnimationFrame(step) : finish();
+    }
+    function finish() {
+      if (sortC >= 0) sortArr(res);
+      dispIdx = res; setHeight(); tw.scrollTop = 0; render(); updateStatus();
+      fpill.classList.remove("on");
     }
     requestAnimationFrame(step);
   }, 0);
 }
 
-// ── Sort ──────────────────────────────────────────────────────
+// ── Sort ─────────────────────────────────────────────────────────────
 function applySort() {
-  if (sortC < 0) {
-    dispIdx = filterStr ? dispIdx : null;
-  } else if (dispIdx === null) {
-    dispIdx = buildAllSorted();
-  } else {
-    sortArr(dispIdx);
-  }
-  setVsHeight();
+  if (sortC < 0)         { dispIdx = filterStr ? dispIdx : null; }
+  else if (!dispIdx)     { dispIdx = makeAllSorted(); }
+  else                   { sortArr(dispIdx); }
+  setHeight();
 }
-
-function buildAllSorted() {
-  const arr = Array.from({ length: totalRows }, (_, i) => i);
-  sortArr(arr);
-  return arr;
+function makeAllSorted() {
+  const a = Array.from({ length: totalRows }, (_, i) => i);
+  return sortArr(a), a;
 }
-
-function sortArr(arr) {
-  const sc = sortC, sd = sortD, isNum = colTypes[sc] === "num";
-  arr.sort((a, b) => {
-    const av = getRow(a)[sc] || "", bv = getRow(b)[sc] || "";
-    return isNum
-      ? (parseFloat(av.replace(/,/g, "")) - parseFloat(bv.replace(/,/g, ""))) * sd
-      : av.localeCompare(bv) * sd;
+function sortArr(a) {
+  const sc = sortC, sd = sortD, num = colTypes[sc] === "num";
+  a.sort((x, y) => {
+    const av = getRow(x)[sc] || "", bv = getRow(y)[sc] || "";
+    return num ? (parseFloat(av) - parseFloat(bv)) * sd : av.localeCompare(bv) * sd;
   });
 }
 
-// ── Status bar ────────────────────────────────────────────────
+// ── Status ───────────────────────────────────────────────────────────
 function updateStatus() {
   const vis = dispIdx === null ? totalRows : dispIdx.length;
   g("s1").textContent = vis.toLocaleString();
@@ -494,73 +456,59 @@ function updateStatus() {
   g("s5").textContent = filterStr ? `"${filterStr}"` : "no filter";
 }
 
-// ── Summary: instant via random sample ───────────────────────
+// ── Summary (50K random sample, instant) ─────────────────────────────
 bsum.addEventListener("click", () => {
   const opening = !sidebar.classList.contains("on");
-  sidebar.classList.toggle("on");
-  bsum.classList.toggle("on");
+  sidebar.classList.toggle("on"); bsum.classList.toggle("on");
   if (opening && !sumBuilt) buildSummary();
 });
 
 function buildSummary() {
   const sampled = totalRows > SAMPLE;
-
-  // Pick random indices (simple approach: random without replacement)
-  const pool = [];
-  if (sampled) {
-    const used = new Uint8Array(totalRows);
-    while (pool.length < SAMPLE) {
-      const ri = Math.floor(Math.random() * totalRows);
-      if (!used[ri]) { used[ri] = 1; pool.push(ri); }
-    }
-  } else {
-    for (let i = 0; i < totalRows; i++) pool.push(i);
+  // Fisher-Yates partial shuffle to pick SAMPLE unique indices
+  const pool = Array.from({ length: totalRows }, (_, i) => i);
+  const n    = sampled ? SAMPLE : totalRows;
+  for (let i = 0; i < n; i++) {
+    const j = i + Math.floor(Math.random() * (totalRows - i));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
   }
+  const sample = pool.slice(0, n);
 
-  const nc = headers.length;
+  const nc  = headers.length;
   const acc = headers.map((_, ci) => ({
-    isNum : colTypes[ci] === "num",
-    count : 0, nulls : 0, sum : 0,
-    min   : Infinity, max : -Infinity,
-    nums  : [], freq  : {}
+    num: colTypes[ci] === "num",
+    cnt: 0, nulls: 0, sum: 0, min: Infinity, max: -Infinity,
+    nums: [], freq: {}
   }));
 
-  for (const ri of pool) {
+  for (const ri of sample) {
     const row = getRow(ri);
     for (let ci = 0; ci < nc; ci++) {
-      const s = acc[ci];
-      const v = (row[ci] || "").trim();
+      const s = acc[ci], v = (row[ci] || "").trim();
       if (!v) { s.nulls++; continue; }
-      s.count++;
-      if (s.isNum) {
-        const f = parseFloat(v.replace(/,/g, ""));
-        if (!isNaN(f)) {
-          s.sum += f;
-          if (f < s.min) s.min = f;
-          if (f > s.max) s.max = f;
-          s.nums.push(f);
-        }
-      } else {
-        s.freq[v] = (s.freq[v] || 0) + 1;
-      }
+      s.cnt++;
+      if (s.num) {
+        const f = parseFloat(v.replace(/,/g,""));
+        if (!isNaN(f)) { s.sum+=f; s.min=Math.min(s.min,f); s.max=Math.max(s.max,f); s.nums.push(f); }
+      } else { s.freq[v] = (s.freq[v]||0)+1; }
     }
   }
 
-  const scale = sampled ? totalRows / pool.length : 1;
+  const scale = sampled ? totalRows / n : 1;
   const fmt = v => {
     if (!isFinite(v)) return "—";
     const a = Math.abs(v);
-    if (a >= 1e9) return (v/1e9).toFixed(2)+"B";
-    if (a >= 1e6) return (v/1e6).toFixed(2)+"M";
-    if (a >= 1e3) return (v/1e3).toFixed(2)+"K";
-    return v % 1 === 0 ? v.toLocaleString() : v.toFixed(2);
+    if (a>=1e9) return (v/1e9).toFixed(2)+"B";
+    if (a>=1e6) return (v/1e6).toFixed(2)+"M";
+    if (a>=1e3) return (v/1e3).toFixed(2)+"K";
+    return v%1===0 ? v.toLocaleString() : v.toFixed(2);
   };
 
   sbb.innerHTML = "";
   if (sampled) {
     const note = document.createElement("div");
     note.style.cssText = "padding:7px 14px;font-size:.7rem;color:var(--muted);border-bottom:1px solid var(--border)";
-    note.textContent = `Based on ${SAMPLE.toLocaleString()}-row sample`;
+    note.textContent = `Based on ${n.toLocaleString()}-row sample`;
     sbb.appendChild(note);
   }
 
@@ -568,18 +516,13 @@ function buildSummary() {
     const s = acc[ci];
     const d = document.createElement("div"); d.className = "cs";
     let body = "";
-
-    if (s.isNum) {
-      s.nums.sort((a, b) => a - b);
-      const len = s.nums.length;
-      const mean = len ? s.sum / len : 0;
-      const q1 = s.nums[Math.floor(len * .25)] ?? s.min;
-      const med = s.nums[Math.floor(len * .5)]  ?? mean;
-      const q3 = s.nums[Math.floor(len * .75)] ?? s.max;
-      const rng = s.max - s.min;
-      const bp = rng > 0 ? Math.round((mean - s.min) / rng * 100) : 50;
-      body = `<div class="sg">
-        <div class="si"><div class="lbl">count</div><div class="val">${Math.round(s.count*scale).toLocaleString()}</div></div>
+    if (s.num) {
+      s.nums.sort((a,b)=>a-b);
+      const len = s.nums.length, mean = len ? s.sum/len : 0;
+      const q1=s.nums[Math.floor(len*.25)]??s.min, med=s.nums[Math.floor(len*.5)]??mean, q3=s.nums[Math.floor(len*.75)]??s.max;
+      const rng=s.max-s.min, bp=rng>0?Math.round((mean-s.min)/rng*100):50;
+      body=`<div class="sg">
+        <div class="si"><div class="lbl">count</div><div class="val">${Math.round(s.cnt*scale).toLocaleString()}</div></div>
         <div class="si"><div class="lbl">nulls</div><div class="val">${Math.round(s.nulls*scale).toLocaleString()}</div></div>
         <div class="si"><div class="lbl">min</div><div class="val">${fmt(s.min)}</div></div>
         <div class="si"><div class="lbl">max</div><div class="val">${fmt(s.max)}</div></div>
@@ -590,25 +533,23 @@ function buildSummary() {
         <div class="si"><div class="lbl">sum</div><div class="val">${fmt(s.sum*scale)}</div></div>
       </div><div class="mb"><div class="mbf" style="width:${bp}%"></div></div>`;
     } else {
-      const entries = Object.entries(s.freq).sort((a, b) => b[1] - a[1]);
-      body = `<div class="sg">
-        <div class="si"><div class="lbl">count</div><div class="val">${Math.round(s.count*scale).toLocaleString()}</div></div>
+      const entries = Object.entries(s.freq).sort((a,b)=>b[1]-a[1]);
+      body=`<div class="sg">
+        <div class="si"><div class="lbl">count</div><div class="val">${Math.round(s.cnt*scale).toLocaleString()}</div></div>
         <div class="si"><div class="lbl">nulls</div><div class="val">${Math.round(s.nulls*scale).toLocaleString()}</div></div>
         <div class="si"><div class="lbl">unique</div><div class="val">${entries.length}${sampled?"+":""}</div></div>
       </div>
       <div style="margin-top:7px;font-size:.7rem">
         <div class="lbl" style="margin-bottom:3px">Top values</div>
-        ${entries.slice(0,3).map(([v,c]) => `<div style="display:flex;justify-content:space-between;gap:6px;margin-bottom:2px">
+        ${entries.slice(0,3).map(([v,c])=>`<div style="display:flex;justify-content:space-between;gap:6px;margin-bottom:2px">
           <span style="font:600 .68rem var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1" title="${esc(v)}">${esc(v)||"(empty)"}</span>
           <span style="color:var(--muted);white-space:nowrap">${c.toLocaleString()}</span>
         </div>`).join("")}
       </div>`;
     }
-
-    d.innerHTML = `<div class="csn" title="${esc(h)}">${esc(h)}</div><div class="cst">${s.isNum?"numeric":"text"}</div>${body}`;
+    d.innerHTML=`<div class="csn" title="${esc(h)}">${esc(h)}</div><div class="cst">${s.num?"numeric":"text"}</div>${body}`;
     sbb.appendChild(d);
   });
-
   sumBuilt = true;
 }
 
