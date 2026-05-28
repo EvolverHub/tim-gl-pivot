@@ -264,13 +264,13 @@ function loadFile(file) {
     chunk(results) {
       if (headers.length === 0 && results.data.length > 0) {
         headers = results.data[0].map(h => String(h).trim());
-        results.data.slice(1).forEach(r => rows.push(r));
-        lineCount += results.data.length;
+        // batch push — much faster than forEach+push
+        Array.prototype.push.apply(rows, results.data.slice(1));
       } else {
-        results.data.forEach(r => rows.push(r));
-        lineCount += results.data.length;
+        Array.prototype.push.apply(rows, results.data);
       }
-      const pct = Math.min(95, Math.round(lineCount / estLines * 95));
+      lineCount += results.data.length;
+      const pct = Math.min(94, Math.round(lineCount / estLines * 94));
       progBar.style.width = pct + "%";
       progText.textContent = `Parsed ${rows.length.toLocaleString()} rows…`;
     },
@@ -278,7 +278,8 @@ function loadFile(file) {
     complete() {
       progBar.style.width = "100%";
       progText.textContent = "Building table…";
-      requestAnimationFrame(() => finalize(file.name));
+      // yield to browser first so progress bar updates, then finalize
+      setTimeout(() => finalize(file.name), 0);
     },
 
     error(err) {
@@ -337,14 +338,32 @@ function measureCols() {
 
 // ─────────────────────────────────────────────────────────────
 // Filter / sort index
+// idx === null means "all rows, natural order" — avoids allocating
+// a 1.3M element array when there's nothing to filter/sort.
 // ─────────────────────────────────────────────────────────────
+function idxLen()         { return idx === null ? rows.length : idx.length; }
+function idxRow(vi)       { return idx === null ? vi : idx[vi]; }
+
 function rebuildIdx() {
   const term = filterStr.toLowerCase();
   const fc   = filterCol === "" ? -1 : +filterCol;
+  const needFilter = !!term;
+  const needSort   = sortC >= 0;
 
-  if (!term) {
+  if (!needFilter && !needSort) {
+    idx = null;           // fast path — no allocation at all
+  } else if (!needFilter && needSort) {
+    // sort only — build index then sort
     idx = Array.from({length: rows.length}, (_, i) => i);
+    const sc = sortC, sd = sortD, isNum = colTypes[sc] === "num";
+    idx.sort((a, b) => {
+      const av = rows[a][sc] || "", bv = rows[b][sc] || "";
+      return isNum
+        ? (parseFloat(av.replace(/,/g,"")) - parseFloat(bv.replace(/,/g,""))) * sd
+        : av.localeCompare(bv) * sd;
+    });
   } else {
+    // filter (and optionally sort)
     idx = [];
     for (let i = 0; i < rows.length; i++) {
       const r = rows[i];
@@ -356,19 +375,18 @@ function rebuildIdx() {
         }
       }
     }
+    if (needSort) {
+      const sc = sortC, sd = sortD, isNum = colTypes[sc] === "num";
+      idx.sort((a, b) => {
+        const av = rows[a][sc] || "", bv = rows[b][sc] || "";
+        return isNum
+          ? (parseFloat(av.replace(/,/g,"")) - parseFloat(bv.replace(/,/g,""))) * sd
+          : av.localeCompare(bv) * sd;
+      });
+    }
   }
 
-  if (sortC >= 0) {
-    const sc = sortC, sd = sortD, isNum = colTypes[sc] === "num";
-    idx.sort((a, b) => {
-      const av = rows[a][sc] || "", bv = rows[b][sc] || "";
-      return isNum
-        ? (parseFloat(av.replace(/,/g,"")) - parseFloat(bv.replace(/,/g,""))) * sd
-        : av.localeCompare(bv) * sd;
-    });
-  }
-
-  vscroll.style.height = (idx.length * ROW_H) + "px";
+  vscroll.style.height = (idxLen() * ROW_H) + "px";
   updateStatus();
 }
 
@@ -415,17 +433,18 @@ twrap.addEventListener("scroll", () => { if (_raf) cancelAnimationFrame(_raf); _
 window.addEventListener("resize", () => { if (idx.length) renderVisible(); });
 
 function renderVisible() {
-  const st   = twrap.scrollTop;
-  const vh   = twrap.clientHeight;
-  const from = Math.max(0, Math.floor(st / ROW_H) - OVER);
-  const to   = Math.min(idx.length, Math.ceil((st + vh) / ROW_H) + OVER);
+  const total = idxLen();
+  const st    = twrap.scrollTop;
+  const vh    = twrap.clientHeight;
+  const from  = Math.max(0, Math.floor(st / ROW_H) - OVER);
+  const to    = Math.min(total, Math.ceil((st + vh) / ROW_H) + OVER);
 
   spTop.style.height = (from * ROW_H) + "px";
-  spBot.style.height = ((idx.length - to) * ROW_H) + "px";
+  spBot.style.height = ((total - to) * ROW_H) + "px";
 
   const frag = document.createDocumentFragment();
   for (let vi = from; vi < to; vi++) {
-    const ri  = idx[vi];
+    const ri  = idxRow(vi);
     const row = rows[ri];
     const div = document.createElement("div"); div.className = "vrow";
 
@@ -569,7 +588,7 @@ function buildSummary() {
 // Helpers
 // ─────────────────────────────────────────────────────────────
 function updateStatus() {
-  $("sb-vis").textContent   = idx.length.toLocaleString();
+  $("sb-vis").textContent   = idxLen().toLocaleString();
   $("sb-tot").textContent   = rows.length.toLocaleString();
   $("sb-cols").textContent  = headers.length;
   $("sb-sort").textContent  = sortC >= 0 ? `sorted by ${headers[sortC]} ${sortD===1?"↑":"↓"}` : "unsorted";
