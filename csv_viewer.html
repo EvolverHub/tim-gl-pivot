@@ -218,24 +218,21 @@ function load(file) {
 // ── Build line index: one pass, O(n chars) ────────────────────
 // After this, rawText + offsets is everything we need.
 function buildIndex(name) {
-  // Count newlines first so we can pre-allocate
-  let count = 1;
-  for (let i = 0; i < rawText.length; i++) {
-    if (rawText.charCodeAt(i) === 10) count++; // '\n'
-  }
-
-  const arr = new Uint32Array(count);
+  // Single pass: pre-allocate generously (avg line ~50 chars), fill, then trim.
+  const maxLines = Math.ceil(rawText.length / 40) + 2;
+  const arr = new Uint32Array(maxLines);
   arr[0] = 0;
   let oi = 1;
   for (let i = 0; i < rawText.length; i++) {
     if (rawText.charCodeAt(i) === 10) arr[oi++] = i + 1;
   }
+  // Drop trailing empty entry if file ends with newline
+  while (oi > 1 && arr[oi - 1] >= rawText.length) oi--;
 
-  // Drop trailing empty line
-  let lineCount = oi;
-  while (lineCount > 1 && arr[lineCount - 1] >= rawText.length) lineCount--;
-
-  offsets   = arr.subarray(0, lineCount);
+  offsets   = arr.subarray(0, oi);
+  // Detect delimiter from header line before any parsing
+  const headerLine = rawText.slice(0, offsets.length > 1 ? offsets[1] : rawText.length);
+  delim = headerLine.split("\t").length > headerLine.split(",").length ? "\t" : ",";
   headers   = getLineParsed(0).map(h => h.trim());
   totalRows = offsets.length - 1;  // line 0 = header
 
