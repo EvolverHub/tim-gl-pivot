@@ -4,413 +4,341 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CSV Viewer</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <style>
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-:root {
-  --bg: #f0f2f7; --surface: #fff; --border: #dde4ef;
-  --navy: #162d50; --accent: #2563eb; --accent-bg: #eff6ff;
-  --text: #1b2230; --muted: #6b7280; --alt: #f8fafc; --hover: #eef2ff;
-  --row-h: 32px;
-  --mono: "SF Mono","Fira Code",Consolas,monospace;
-  --sans: system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f0f2f7;--surface:#fff;--border:#dde4ef;
+  --navy:#162d50;--accent:#2563eb;--accent-bg:#eff6ff;
+  --text:#1b2230;--muted:#6b7280;--alt:#f8fafc;--hover:#eef2ff;
+  --row-h:32px;
+  --mono:"SF Mono","Fira Code",Consolas,monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
 }
-body { font-family: var(--sans); background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
+body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column}
 
-/* ── Header ── */
-header { background: var(--navy); color: #fff; padding: 14px 24px; display: flex; align-items: center; gap: 12px; }
-header h1 { font-size: 1rem; font-weight: 700; }
-header .sub { font-size: .75rem; opacity: .5; margin-top: 2px; }
-header a { margin-left: auto; color: rgba(255,255,255,.55); font-size: .78rem; text-decoration: none; }
-header a:hover { color: #fff; }
+/* header */
+header{background:var(--navy);color:#fff;padding:14px 24px;display:flex;align-items:center;gap:12px}
+header h1{font-size:1rem;font-weight:700}
+.sub{font-size:.75rem;opacity:.5;margin-top:2px}
+header a{margin-left:auto;color:rgba(255,255,255,.55);font-size:.78rem;text-decoration:none}
+header a:hover{color:#fff}
 
-/* ── Drop zone ── */
-#drop-zone {
-  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 12px; padding: 60px 24px; cursor: pointer; transition: background .15s;
-}
-#drop-zone.over { background: var(--accent-bg); }
-.drop-icon {
-  width: 60px; height: 60px; border: 2px solid var(--border); border-radius: 14px;
-  display: flex; align-items: center; justify-content: center; color: var(--muted); transition: .2s;
-}
-#drop-zone.over .drop-icon { border-color: var(--accent); color: var(--accent); }
-.drop-label { font-size: .95rem; font-weight: 600; }
-.drop-sub { font-size: .8rem; color: var(--muted); }
-.drop-btn {
-  padding: 7px 18px; background: var(--accent); color: #fff; border: none;
-  border-radius: 6px; font: 600 .82rem var(--sans); cursor: pointer;
-}
-.drop-btn:hover { background: #1d4ed8; }
-#file-input { display: none; }
+/* drop zone */
+#drop-zone{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:60px 24px;cursor:pointer;transition:background .15s}
+#drop-zone.over{background:var(--accent-bg)}
+.di{width:60px;height:60px;border:2px solid var(--border);border-radius:14px;display:flex;align-items:center;justify-content:center;color:var(--muted);transition:.2s}
+#drop-zone.over .di{border-color:var(--accent);color:var(--accent)}
+.dl{font-size:.95rem;font-weight:600}
+.ds{font-size:.8rem;color:var(--muted)}
+.dbtn{padding:7px 18px;background:var(--accent);color:#fff;border:none;border-radius:6px;font:600 .82rem var(--sans);cursor:pointer}
+.dbtn:hover{background:#1d4ed8}
+#fi{display:none}
 
-/* ── Progress overlay ── */
-#overlay {
-  display: none; position: fixed; inset: 0; z-index: 100;
-  background: rgba(22,45,80,.6); align-items: center; justify-content: center; flex-direction: column; gap: 14px; color: #fff;
-}
-#overlay.on { display: flex; }
-.spinner { width: 34px; height: 34px; border: 3px solid rgba(255,255,255,.25); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
-#prog-text { font-size: .82rem; opacity: .85; }
-#prog-bar-wrap { width: 260px; height: 4px; background: rgba(255,255,255,.2); border-radius: 2px; overflow: hidden; }
-#prog-bar { height: 100%; background: #fff; border-radius: 2px; transition: width .2s; width: 0%; }
+/* loading overlay */
+#overlay{display:none;position:fixed;inset:0;z-index:100;background:rgba(22,45,80,.65);align-items:center;justify-content:center;flex-direction:column;gap:14px;color:#fff}
+#overlay.on{display:flex}
+.spin{width:34px;height:34px;border:3px solid rgba(255,255,255,.25);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#pt{font-size:.85rem;opacity:.9}
 
-/* ── App ── */
-#app { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+/* app shell */
+#app{display:none;flex:1;flex-direction:column;overflow:hidden}
 
-/* ── Toolbar ── */
-#toolbar {
-  background: var(--surface); border-bottom: 1px solid var(--border);
-  padding: 8px 14px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-}
-#file-info { min-width: 0; }
-#file-name { font-weight: 700; font-size: .88rem; color: var(--accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-#file-meta { font-size: .72rem; color: var(--muted); }
-#search {
-  flex: 1; min-width: 160px; max-width: 360px; padding: 5px 10px;
-  border: 1px solid var(--border); border-radius: 6px; font: .82rem var(--sans);
-}
-#search:focus { outline: none; border-color: var(--accent); }
-#col-select {
-  padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px;
-  font: .8rem var(--sans); background: var(--surface); cursor: pointer;
-}
-.tbtn {
-  padding: 5px 12px; border: 1px solid var(--border); border-radius: 6px;
-  font: .8rem var(--sans); background: var(--surface); cursor: pointer; white-space: nowrap;
-}
-.tbtn:hover { background: var(--accent-bg); border-color: var(--accent); color: var(--accent); }
-.tbtn.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+/* toolbar */
+#toolbar{background:var(--surface);border-bottom:1px solid var(--border);padding:8px 14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+#fnm{font-weight:700;font-size:.88rem;color:var(--accent)}
+#fmeta{font-size:.72rem;color:var(--muted)}
+#srch{flex:1;min-width:160px;max-width:360px;padding:5px 10px;border:1px solid var(--border);border-radius:6px;font:.82rem var(--sans)}
+#srch:focus{outline:none;border-color:var(--accent)}
+#csel{padding:5px 8px;border:1px solid var(--border);border-radius:6px;font:.8rem var(--sans);background:var(--surface);cursor:pointer}
+.tbtn{padding:5px 12px;border:1px solid var(--border);border-radius:6px;font:.8rem var(--sans);background:var(--surface);cursor:pointer;white-space:nowrap}
+.tbtn:hover{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
+.tbtn.on{background:var(--accent);color:#fff;border-color:var(--accent)}
 
-/* ── Layout ── */
-#main { flex: 1; display: flex; overflow: hidden; }
+/* layout */
+#main{flex:1;display:flex;overflow:hidden}
 
-/* ── Summary sidebar ── */
-#sidebar {
-  width: 270px; min-width: 200px; background: var(--surface);
-  border-right: 1px solid var(--border); overflow-y: auto;
-  display: none; flex-direction: column; flex-shrink: 0;
-}
-#sidebar.on { display: flex; }
-#sidebar h2 { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); padding: 12px 14px 8px; border-bottom: 1px solid var(--border); }
-.cs { padding: 10px 14px; border-bottom: 1px solid var(--border); }
-.cs-name { font-size: .8rem; font-weight: 700; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cs-type { display: inline-block; font-size: .65rem; font-weight: 700; padding: 1px 5px; border-radius: 3px; background: var(--accent-bg); color: var(--accent); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .04em; }
-.sg { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 8px; }
-.si .lbl { font-size: .7rem; color: var(--muted); }
-.si .val { font: 600 .68rem var(--mono); }
-.mbar { margin-top: 5px; height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; }
-.mbar-fill { height: 100%; background: var(--accent); }
+/* summary sidebar */
+#sb{width:270px;min-width:200px;background:var(--surface);border-right:1px solid var(--border);overflow-y:auto;display:none;flex-direction:column;flex-shrink:0}
+#sb.on{display:flex}
+#sb h2{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);padding:12px 14px 8px;border-bottom:1px solid var(--border)}
+.cs{padding:10px 14px;border-bottom:1px solid var(--border)}
+.csn{font-size:.8rem;font-weight:700;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cst{display:inline-block;font-size:.65rem;font-weight:700;padding:1px 5px;border-radius:3px;background:var(--accent-bg);color:var(--accent);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em}
+.sg{display:grid;grid-template-columns:1fr 1fr;gap:3px 8px}
+.si .lbl{font-size:.7rem;color:var(--muted)}
+.si .val{font:600 .68rem var(--mono)}
+.mb{margin-top:5px;height:3px;background:var(--border);border-radius:2px;overflow:hidden}
+.mbf{height:100%;background:var(--accent)}
 
-/* ── Table ── */
-#table-wrap { flex: 1; overflow: auto; position: relative; }
-#t-head {
-  position: sticky; top: 0; z-index: 10; background: var(--navy); color: #fff;
-  display: flex; align-items: stretch; min-width: max-content;
-}
-.th {
-  padding: 0 10px; font-size: .72rem; font-weight: 700; letter-spacing: .04em;
-  text-transform: uppercase; cursor: pointer; display: flex; align-items: center; gap: 4px;
-  white-space: nowrap; height: 34px; border-right: 1px solid rgba(255,255,255,.1); flex-shrink: 0;
-  user-select: none;
-}
-.th:hover { background: rgba(255,255,255,.08); }
-.th.asc  .si::after { content: " ↑"; }
-.th.desc .si::after { content: " ↓"; }
-.th:not(.asc):not(.desc) .si::after { content: " ⇅"; opacity: .35; }
-.th-n { width: 52px; min-width: 52px; justify-content: center; cursor: default; font-size: .68rem; }
-.th-n:hover { background: none; }
+/* table */
+#tw{flex:1;overflow:auto;position:relative;background:var(--bg)}
+#thead{position:sticky;top:0;z-index:10;background:var(--navy);color:#fff;display:flex;align-items:stretch;min-width:max-content}
+.th{padding:0 10px;font-size:.72rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;gap:4px;white-space:nowrap;height:34px;border-right:1px solid rgba(255,255,255,.1);flex-shrink:0;user-select:none}
+.th:hover{background:rgba(255,255,255,.08)}
+.th.asc .si::after{content:" ↑"}
+.th.desc .si::after{content:" ↓"}
+.th:not(.asc):not(.desc) .si::after{content:" ⇅";opacity:.35}
+.th-rn{width:52px;min-width:52px;justify-content:center;cursor:default;font-size:.68rem}
+.th-rn:hover{background:none}
+#vs{position:relative;min-width:max-content}
+.vrow{display:flex;align-items:stretch;height:var(--row-h);border-bottom:1px solid var(--border);background:var(--surface);min-width:max-content}
+.vrow:nth-child(even){background:var(--alt)}
+.vrow:hover{background:var(--hover)}
+.rn{width:52px;min-width:52px;display:flex;align-items:center;justify-content:center;color:var(--muted);font:.68rem var(--mono);border-right:1px solid var(--border);flex-shrink:0}
+.vc{padding:0 10px;font:.78rem var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0;display:flex;align-items:center;border-right:1px solid var(--border)}
+.vc:last-child{border-right:none}
+.vc.n{justify-content:flex-end}
 
-#vscroll { position: relative; min-width: max-content; }
-#rows { }
-.vrow { display: flex; align-items: stretch; height: var(--row-h); border-bottom: 1px solid var(--border); background: var(--surface); min-width: max-content; }
-.vrow:nth-child(even) { background: var(--alt); }
-.vrow:hover { background: var(--hover); }
-.rn { width: 52px; min-width: 52px; text-align: center; color: var(--muted); font: .68rem var(--mono); display: flex; align-items: center; justify-content: center; border-right: 1px solid var(--border); flex-shrink: 0; }
-.vc { padding: 0 10px; font: .78rem var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; display: flex; align-items: center; border-right: 1px solid var(--border); }
-.vc:last-child { border-right: none; }
-.vc.n { justify-content: flex-end; }
+/* status bar */
+#sbar{background:var(--surface);border-top:1px solid var(--border);padding:4px 14px;display:none;font-size:.72rem;color:var(--muted);gap:14px;align-items:center}
+#sbar.on{display:flex}
+#sbar strong{color:var(--text)}
 
-/* ── Status bar ── */
-#statusbar { background: var(--surface); border-top: 1px solid var(--border); padding: 4px 14px; display: none; font-size: .72rem; color: var(--muted); gap: 14px; align-items: center; }
-#statusbar.on { display: flex; }
-#statusbar strong { color: var(--text); }
+/* filter progress pill */
+#fpill{display:none;position:absolute;bottom:12px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;font-size:.75rem;padding:5px 14px;border-radius:20px;white-space:nowrap;z-index:20}
+#fpill.on{display:block}
 </style>
 </head>
 <body>
 
-<div id="overlay">
-  <div class="spinner"></div>
-  <div id="prog-text">Reading file…</div>
-  <div id="prog-bar-wrap"><div id="prog-bar"></div></div>
-</div>
+<div id="overlay"><div class="spin"></div><div id="pt">Reading file…</div></div>
 
 <header>
-  <div><h1>CSV Viewer</h1><div class="sub">Drop any CSV · handles millions of rows</div></div>
+  <div><h1>CSV Viewer</h1><div class="sub">Drop any CSV · instant display · no row limit</div></div>
   <a href="index.html">← GL Data Hub</a>
 </header>
 
 <div id="drop-zone">
-  <div class="drop-icon">
+  <div class="di">
     <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/>
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+      <polyline points="14 2 14 8 20 8"/>
+      <line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/>
     </svg>
   </div>
-  <div class="drop-label">Drop a CSV file here</div>
-  <div class="drop-sub">Handles millions of rows · parsed in a background thread</div>
-  <button class="drop-btn" onclick="document.getElementById('file-input').click()">Browse file</button>
-  <input type="file" id="file-input" accept=".csv,.tsv,.txt">
+  <div class="dl">Drop a CSV file here</div>
+  <div class="ds">Instant table · works on millions of rows · fully offline</div>
+  <button class="dbtn" onclick="document.getElementById('fi').click()">Browse file</button>
+  <input type="file" id="fi" accept=".csv,.tsv,.txt">
 </div>
 
 <div id="app">
   <div id="toolbar">
-    <div id="file-info">
-      <div id="file-name">—</div>
-      <div id="file-meta">—</div>
-    </div>
-    <input id="search" type="text" placeholder="Search…">
-    <select id="col-select"><option value="">All columns</option></select>
-    <button class="tbtn" id="btn-summary">Summary</button>
-    <button class="tbtn" onclick="document.getElementById('file-input').click()">New file</button>
+    <div><div id="fnm">—</div><div id="fmeta">—</div></div>
+    <input id="srch" type="text" placeholder="Search…">
+    <select id="csel"><option value="">All columns</option></select>
+    <button class="tbtn" id="bsum">Summary</button>
+    <button class="tbtn" onclick="document.getElementById('fi').click()">New file</button>
   </div>
   <div id="main">
-    <div id="sidebar"><h2>Column Summary</h2><div id="sidebar-body"></div></div>
-    <div id="table-wrap">
-      <div id="t-head"></div>
-      <div id="vscroll">
-        <div id="sp-top"></div>
-        <div id="rows"></div>
-        <div id="sp-bot"></div>
+    <div id="sb"><h2>Column Summary</h2><div id="sbb"></div></div>
+    <div id="tw">
+      <div id="thead"></div>
+      <div id="vs">
+        <div id="spt"></div>
+        <div id="rowsEl"></div>
+        <div id="spb"></div>
       </div>
+      <div id="fpill"></div>
     </div>
   </div>
 </div>
-
-<div id="statusbar">
-  Showing <strong id="sb-vis">0</strong> of <strong id="sb-tot">0</strong> rows
-  &nbsp;·&nbsp; <strong id="sb-cols">0</strong> cols
-  &nbsp;·&nbsp; <span id="sb-sort">unsorted</span>
-  &nbsp;·&nbsp; <span id="sb-filter">no filter</span>
+<div id="sbar">
+  Showing <strong id="s1">0</strong> of <strong id="s2">0</strong> rows
+  &nbsp;·&nbsp; <strong id="s3">0</strong> cols
+  &nbsp;·&nbsp; <span id="s4">unsorted</span>
+  &nbsp;·&nbsp; <span id="s5">no filter</span>
 </div>
 
 <script>
-// ─────────────────────────────────────────────────────────────
-// State
-// ─────────────────────────────────────────────────────────────
-let rows      = [];   // array of string arrays
+// ═══════════════════════════════════════════════════════════════════════
+// Architecture: store raw text + line byte offsets.
+// Parse ONLY the ~60 visible rows on demand — never loads all rows.
+// For 1.3M rows: reads in ~2s, table appears instantly after.
+// ═══════════════════════════════════════════════════════════════════════
+
+"use strict";
+
+// ── State ──────────────────────────────────────────────────────
+let rawText   = "";      // entire file as one string
+let offsets   = null;    // Uint32Array: char position of each line start
 let headers   = [];
-let colTypes  = [];   // "num" | "str"
-let colW      = [];   // px widths
-let idx       = [];   // filtered + sorted row indices
+let delim     = ",";
+let totalRows = 0;       // excludes header line
+let colTypes  = [];      // "num" | "str"
+let colW      = [];      // px
+
+let dispIdx   = null;    // null = show all rows in order; Int32Array/array = filtered/sorted
 let sortC     = -1;
 let sortD     = 1;
 let filterStr = "";
 let filterCol = "";
-let summaryDone = false;
+let sumBuilt  = false;
+let filterAbort = false;
 
-const ROW_H   = 32;
-const OVER    = 25;
-const SAMPLE  = 100_000;
+const ROW_H  = 32;
+const OVER   = 30;       // rows to render beyond viewport
+const SAMPLE = 80_000;   // rows for summary stats
 
-// ─────────────────────────────────────────────────────────────
-// DOM refs
-// ─────────────────────────────────────────────────────────────
-const $  = id => document.getElementById(id);
-const overlay   = $("overlay");
-const progText  = $("prog-text");
-const progBar   = $("prog-bar");
-const dropZone  = $("drop-zone");
-const appEl     = $("app");
-const fileInput = $("file-input");
-const search    = $("search");
-const colSelect = $("col-select");
-const btnSum    = $("btn-summary");
-const sidebar   = $("sidebar");
-const sideBody  = $("sidebar-body");
-const thead     = $("t-head");
-const twrap     = $("table-wrap");
-const vscroll   = $("vscroll");
-const spTop     = $("sp-top");
-const spBot     = $("sp-bot");
-const rowsEl    = $("rows");
-const statusbar = $("statusbar");
+// ── DOM ───────────────────────────────────────────────────────
+const g  = id => document.getElementById(id);
+const overlay = g("overlay"), pt = g("pt");
+const dropZone = g("drop-zone"), fi = g("fi"), appEl = g("app");
+const srch = g("srch"), csel = g("csel"), bsum = g("bsum");
+const sidebar = g("sb"), sbb = g("sbb");
+const tw = g("tw"), thead = g("thead");
+const vs = g("vs"), spt = g("spt"), rowsEl = g("rowsEl"), spb = g("spb");
+const sbar = g("sbar"), fpill = g("fpill");
 
-// ─────────────────────────────────────────────────────────────
-// Drop / file input
-// ─────────────────────────────────────────────────────────────
+// ── Drop / pick ───────────────────────────────────────────────
 ["dragenter","dragover"].forEach(e => dropZone.addEventListener(e, ev => { ev.preventDefault(); dropZone.classList.add("over"); }));
 ["dragleave","drop"].forEach(e     => dropZone.addEventListener(e, ev => { ev.preventDefault(); dropZone.classList.remove("over"); }));
-dropZone.addEventListener("drop",  ev => ev.dataTransfer.files[0] && loadFile(ev.dataTransfer.files[0]));
-fileInput.addEventListener("change", () => fileInput.files[0] && loadFile(fileInput.files[0]));
+dropZone.addEventListener("drop",  ev => { const f = ev.dataTransfer.files[0]; if (f) load(f); });
+fi.addEventListener("change", () => { if (fi.files[0]) load(fi.files[0]); });
 document.body.addEventListener("dragover", ev => ev.preventDefault());
-document.body.addEventListener("drop", ev => { ev.preventDefault(); ev.dataTransfer.files[0] && loadFile(ev.dataTransfer.files[0]); });
+document.body.addEventListener("drop", ev => { ev.preventDefault(); const f = ev.dataTransfer.files[0]; if (f) load(f); });
 
-// ─────────────────────────────────────────────────────────────
-// Load & parse — PapaParse does the heavy lifting in a worker
-// ─────────────────────────────────────────────────────────────
-function loadFile(file) {
-  showOverlay("Reading file…", 0);
-  rows = []; headers = []; colTypes = []; colW = []; idx = [];
-  sortC = -1; filterStr = ""; filterCol = ""; summaryDone = false;
+// ── Load: read entire file as text ────────────────────────────
+function load(file) {
+  pt.textContent = "Reading file…";
+  overlay.classList.add("on");
+  filterAbort = true;
 
-  let lineCount  = 0;
-  const estLines = Math.max(1, Math.round(file.size / 55)); // ~55 bytes/row estimate
-
-  Papa.parse(file, {
-    worker: true,          // parse in background thread — UI never freezes
-    skipEmptyLines: true,
-
-    chunk(results) {
-      if (headers.length === 0 && results.data.length > 0) {
-        headers = results.data[0].map(h => String(h).trim());
-        // batch push — much faster than forEach+push
-        Array.prototype.push.apply(rows, results.data.slice(1));
-      } else {
-        Array.prototype.push.apply(rows, results.data);
-      }
-      lineCount += results.data.length;
-      const pct = Math.min(94, Math.round(lineCount / estLines * 94));
-      progBar.style.width = pct + "%";
-      progText.textContent = `Parsed ${rows.length.toLocaleString()} rows…`;
-    },
-
-    complete() {
-      progBar.style.width = "100%";
-      progText.textContent = "Building table…";
-      // yield to browser first so progress bar updates, then finalize
-      setTimeout(() => finalize(file.name), 0);
-    },
-
-    error(err) {
-      hideOverlay();
-      alert("Parse error: " + err.message);
-    }
-  });
+  const reader = new FileReader();
+  reader.onload = e => {
+    rawText = e.target.result;
+    pt.textContent = "Indexing lines…";
+    // Yield so the UI updates, then index
+    setTimeout(buildIndex.bind(null, file.name), 0);
+  };
+  reader.readAsText(file);
 }
 
-// ─────────────────────────────────────────────────────────────
-// Finalize — runs on main thread after parse, but only fast ops
-// ─────────────────────────────────────────────────────────────
-function finalize(name) {
+// ── Build line index: one pass, O(n chars) ────────────────────
+// After this, rawText + offsets is everything we need.
+function buildIndex(name) {
+  // Count newlines first so we can pre-allocate
+  let count = 1;
+  for (let i = 0; i < rawText.length; i++) {
+    if (rawText.charCodeAt(i) === 10) count++; // '\n'
+  }
+
+  const arr = new Uint32Array(count);
+  arr[0] = 0;
+  let oi = 1;
+  for (let i = 0; i < rawText.length; i++) {
+    if (rawText.charCodeAt(i) === 10) arr[oi++] = i + 1;
+  }
+
+  // Drop trailing empty line
+  let lineCount = oi;
+  while (lineCount > 1 && arr[lineCount - 1] >= rawText.length) lineCount--;
+
+  offsets   = arr.subarray(0, lineCount);
+  headers   = getLineParsed(0).map(h => h.trim());
+  totalRows = offsets.length - 1;  // line 0 = header
+
   detectTypes();
   measureCols();
-  buildColSelect();
-  search.value = "";
-  rebuildIdx();
-  renderHead();
-  $("file-name").textContent = name;
-  $("file-meta").textContent = `${rows.length.toLocaleString()} rows · ${headers.length} columns`;
+  buildColDropdown();
+  buildTableHeader();
+
+  sortC = -1; sortD = 1; filterStr = ""; filterCol = "";
+  srch.value = ""; dispIdx = null; sumBuilt = false; filterAbort = false;
+
+  g("fnm").textContent   = name;
+  g("fmeta").textContent = `${totalRows.toLocaleString()} rows · ${headers.length} columns`;
+
   dropZone.style.display = "none";
-  appEl.style.display = "flex";
-  statusbar.classList.add("on");
-  hideOverlay();
-  twrap.scrollTop = 0;
+  appEl.style.display    = "flex";
+  sbar.classList.add("on");
+  overlay.classList.remove("on");
+
+  tw.scrollTop = 0;
+  setVsHeight();
   renderVisible();
   updateStatus();
 }
 
-// ─────────────────────────────────────────────────────────────
-// Type detection — sample first 500 rows only
-// ─────────────────────────────────────────────────────────────
+// ── Line parsing: get parsed cells for line i (0 = header) ───
+function getLineParsed(lineIdx) {
+  const start = offsets[lineIdx];
+  let end = lineIdx + 1 < offsets.length ? offsets[lineIdx + 1] - 1 : rawText.length;
+  // Strip \r
+  if (rawText.charCodeAt(end - 1) === 13) end--;
+  return splitCSV(rawText.slice(start, end));
+}
+
+// Data row: ri is 0-based (0 = first data row, skipping header)
+function getRow(ri) { return getLineParsed(ri + 1); }
+
+// RFC-4180 split
+function splitCSV(line) {
+  const res = []; let cur = "", inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (inQ) {
+      if (c === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+      else if (c === '"') inQ = false;
+      else cur += c;
+    } else {
+      if (c === '"') inQ = true;
+      else if (c === delim) { res.push(cur); cur = ""; }
+      else cur += c;
+    }
+  }
+  res.push(cur);
+  return res;
+}
+
+// ── Type detection (200-row sample) ──────────────────────────
 function detectTypes() {
-  const sample = rows.slice(0, Math.min(500, rows.length));
+  const n = Math.min(200, totalRows);
+  const first = rawText.slice(0, offsets[1] || rawText.length);
+  delim = first.split("\t").length > first.split(",").length ? "\t" : ",";
   colTypes = headers.map((_, ci) => {
-    const hits = sample.filter(r => { const v = (r[ci] || "").trim(); return v !== "" && !isNaN(+v.replace(/,/g,"")); }).length;
-    return hits / sample.length > 0.7 ? "num" : "str";
+    let hits = 0;
+    for (let ri = 0; ri < n; ri++) {
+      const v = (getRow(ri)[ci] || "").trim();
+      if (v !== "" && !isNaN(+v.replace(/,/g, ""))) hits++;
+    }
+    return hits / n > 0.7 ? "num" : "str";
   });
 }
 
-// ─────────────────────────────────────────────────────────────
-// Column widths — canvas measure on 200-row sample
-// ─────────────────────────────────────────────────────────────
+// ── Column widths (100-row sample) ────────────────────────────
 function measureCols() {
-  const cv  = document.createElement("canvas");
+  const cv = document.createElement("canvas");
   const ctx = cv.getContext("2d");
-  ctx.font  = "12px SF Mono,Fira Code,Consolas,monospace";
-  const sample = rows.slice(0, Math.min(200, rows.length));
+  ctx.font = "12px SF Mono,Fira Code,Consolas,monospace";
+  const n = Math.min(100, totalRows);
   colW = headers.map((h, ci) => {
     let m = ctx.measureText(h).width + 56;
-    for (const r of sample) { const w = ctx.measureText(r[ci] || "").width + 24; if (w > m) m = w; }
+    for (let ri = 0; ri < n; ri++) {
+      const w = ctx.measureText(getRow(ri)[ci] || "").width + 24;
+      if (w > m) m = w;
+    }
     return Math.min(Math.max(m, 72), 300);
   });
 }
 
-// ─────────────────────────────────────────────────────────────
-// Filter / sort index
-// idx === null means "all rows, natural order" — avoids allocating
-// a 1.3M element array when there's nothing to filter/sort.
-// ─────────────────────────────────────────────────────────────
-function idxLen()         { return idx === null ? rows.length : idx.length; }
-function idxRow(vi)       { return idx === null ? vi : idx[vi]; }
-
-function rebuildIdx() {
-  const term = filterStr.toLowerCase();
-  const fc   = filterCol === "" ? -1 : +filterCol;
-  const needFilter = !!term;
-  const needSort   = sortC >= 0;
-
-  if (!needFilter && !needSort) {
-    idx = null;           // fast path — no allocation at all
-  } else if (!needFilter && needSort) {
-    // sort only — build index then sort
-    idx = Array.from({length: rows.length}, (_, i) => i);
-    const sc = sortC, sd = sortD, isNum = colTypes[sc] === "num";
-    idx.sort((a, b) => {
-      const av = rows[a][sc] || "", bv = rows[b][sc] || "";
-      return isNum
-        ? (parseFloat(av.replace(/,/g,"")) - parseFloat(bv.replace(/,/g,""))) * sd
-        : av.localeCompare(bv) * sd;
-    });
-  } else {
-    // filter (and optionally sort)
-    idx = [];
-    for (let i = 0; i < rows.length; i++) {
-      const r = rows[i];
-      if (fc >= 0) {
-        if ((r[fc] || "").toLowerCase().includes(term)) idx.push(i);
-      } else {
-        for (let j = 0; j < headers.length; j++) {
-          if ((r[j] || "").toLowerCase().includes(term)) { idx.push(i); break; }
-        }
-      }
-    }
-    if (needSort) {
-      const sc = sortC, sd = sortD, isNum = colTypes[sc] === "num";
-      idx.sort((a, b) => {
-        const av = rows[a][sc] || "", bv = rows[b][sc] || "";
-        return isNum
-          ? (parseFloat(av.replace(/,/g,"")) - parseFloat(bv.replace(/,/g,""))) * sd
-          : av.localeCompare(bv) * sd;
-      });
-    }
-  }
-
-  vscroll.style.height = (idxLen() * ROW_H) + "px";
-  updateStatus();
-}
-
-// ─────────────────────────────────────────────────────────────
-// Column selector dropdown
-// ─────────────────────────────────────────────────────────────
-function buildColSelect() {
-  colSelect.innerHTML = '<option value="">All columns</option>';
+// ── Column dropdown ───────────────────────────────────────────
+function buildColDropdown() {
+  csel.innerHTML = '<option value="">All columns</option>';
   headers.forEach((h, i) => {
     const o = document.createElement("option");
-    o.value = i; o.textContent = h;
-    colSelect.appendChild(o);
+    o.value = i; o.textContent = h; csel.appendChild(o);
   });
 }
 
-search.addEventListener("input", () => { filterStr = search.value; rebuildIdx(); twrap.scrollTop = 0; renderVisible(); });
-colSelect.addEventListener("change", () => { filterCol = colSelect.value; rebuildIdx(); twrap.scrollTop = 0; renderVisible(); });
-
-// ─────────────────────────────────────────────────────────────
-// Header
-// ─────────────────────────────────────────────────────────────
-function renderHead() {
+// ── Table header ──────────────────────────────────────────────
+function buildTableHeader() {
   thead.innerHTML = "";
-  const rn = document.createElement("div"); rn.className = "th th-n"; rn.textContent = "#"; thead.appendChild(rn);
+  const rn = document.createElement("div");
+  rn.className = "th th-rn"; rn.textContent = "#";
+  thead.appendChild(rn);
+
   headers.forEach((h, ci) => {
     const th = document.createElement("div");
     th.className = "th"; th.style.width = colW[ci] + "px";
@@ -419,37 +347,44 @@ function renderHead() {
       if (sortC === ci) sortD = -sortD; else { sortC = ci; sortD = 1; }
       thead.querySelectorAll(".th").forEach(t => t.classList.remove("asc","desc"));
       th.classList.add(sortD === 1 ? "asc" : "desc");
-      rebuildIdx(); twrap.scrollTop = 0; renderVisible(); updateStatus();
+      applySort();
+      tw.scrollTop = 0; renderVisible(); updateStatus();
     });
     thead.appendChild(th);
   });
 }
 
-// ─────────────────────────────────────────────────────────────
-// Virtual scrolling
-// ─────────────────────────────────────────────────────────────
+// ── Virtual scroll height ─────────────────────────────────────
+function setVsHeight() {
+  const n = dispIdx === null ? totalRows : dispIdx.length;
+  vs.style.height = (n * ROW_H) + "px";
+}
+
+// ── Virtual renderer — parses only visible rows on demand ─────
 let _raf = null;
-twrap.addEventListener("scroll", () => { if (_raf) cancelAnimationFrame(_raf); _raf = requestAnimationFrame(renderVisible); });
-window.addEventListener("resize", () => { if (idx.length) renderVisible(); });
+tw.addEventListener("scroll", () => { if (_raf) cancelAnimationFrame(_raf); _raf = requestAnimationFrame(renderVisible); });
+window.addEventListener("resize", () => { if (totalRows) renderVisible(); });
 
 function renderVisible() {
-  const total = idxLen();
-  const st    = twrap.scrollTop;
-  const vh    = twrap.clientHeight;
+  const total = dispIdx === null ? totalRows : dispIdx.length;
+  const st    = tw.scrollTop;
+  const vh    = tw.clientHeight;
   const from  = Math.max(0, Math.floor(st / ROW_H) - OVER);
   const to    = Math.min(total, Math.ceil((st + vh) / ROW_H) + OVER);
 
-  spTop.style.height = (from * ROW_H) + "px";
-  spBot.style.height = ((total - to) * ROW_H) + "px";
+  spt.style.height = (from * ROW_H) + "px";
+  spb.style.height = ((total - to) * ROW_H) + "px";
 
   const frag = document.createDocumentFragment();
   for (let vi = from; vi < to; vi++) {
-    const ri  = idxRow(vi);
-    const row = rows[ri];
+    const ri  = dispIdx === null ? vi : dispIdx[vi];
+    const row = getRow(ri);   // ← parses only this one line, super fast
+
     const div = document.createElement("div"); div.className = "vrow";
 
-    const rn = document.createElement("div"); rn.className = "rn";
-    rn.textContent = (ri + 1).toLocaleString(); div.appendChild(rn);
+    const rnEl = document.createElement("div");
+    rnEl.className = "rn"; rnEl.textContent = (ri + 1).toLocaleString();
+    div.appendChild(rnEl);
 
     for (let ci = 0; ci < headers.length; ci++) {
       const c = document.createElement("div");
@@ -461,62 +396,160 @@ function renderVisible() {
     }
     frag.appendChild(div);
   }
-  rowsEl.innerHTML = ""; rowsEl.appendChild(frag);
+  rowsEl.innerHTML = "";
+  rowsEl.appendChild(frag);
 }
 
-// ─────────────────────────────────────────────────────────────
-// Summary — instant via random sample
-// ─────────────────────────────────────────────────────────────
-btnSum.addEventListener("click", () => {
+// ── Search ────────────────────────────────────────────────────
+let _searchTimer = null;
+srch.addEventListener("input", () => {
+  filterStr = srch.value;
+  clearTimeout(_searchTimer);
+  _searchTimer = setTimeout(applyFilterAsync, 300);
+});
+csel.addEventListener("change", () => {
+  filterCol = csel.value; applyFilterAsync();
+});
+
+function applyFilterAsync() {
+  filterAbort = true;
+  setTimeout(() => {
+    filterAbort = false;
+    if (!filterStr) {
+      dispIdx = sortC >= 0 ? buildAllSorted() : null;
+      setVsHeight(); tw.scrollTop = 0; renderVisible(); updateStatus();
+      fpill.classList.remove("on");
+      return;
+    }
+    fpill.textContent = "Filtering 0%";
+    fpill.classList.add("on");
+
+    const term   = filterStr.toLowerCase();
+    const fc     = filterCol === "" ? -1 : +filterCol;
+    const result = [];
+    let ri = 0;
+    const STEP = 15_000;
+
+    function step() {
+      if (filterAbort) { fpill.classList.remove("on"); return; }
+      const end = Math.min(ri + STEP, totalRows);
+      for (; ri < end; ri++) {
+        const row = getRow(ri);
+        let hit = false;
+        if (fc >= 0) {
+          hit = (row[fc] || "").toLowerCase().includes(term);
+        } else {
+          for (let j = 0; j < headers.length; j++) {
+            if ((row[j] || "").toLowerCase().includes(term)) { hit = true; break; }
+          }
+        }
+        if (hit) result.push(ri);
+      }
+      fpill.textContent = `Filtering ${Math.round(ri / totalRows * 100)}%`;
+      if (ri < totalRows) {
+        requestAnimationFrame(step);
+      } else {
+        if (sortC >= 0) sortArr(result);
+        dispIdx = result;
+        setVsHeight(); tw.scrollTop = 0; renderVisible(); updateStatus();
+        fpill.classList.remove("on");
+      }
+    }
+    requestAnimationFrame(step);
+  }, 0);
+}
+
+// ── Sort ──────────────────────────────────────────────────────
+function applySort() {
+  if (sortC < 0) {
+    dispIdx = filterStr ? dispIdx : null;
+  } else if (dispIdx === null) {
+    dispIdx = buildAllSorted();
+  } else {
+    sortArr(dispIdx);
+  }
+  setVsHeight();
+}
+
+function buildAllSorted() {
+  const arr = Array.from({ length: totalRows }, (_, i) => i);
+  sortArr(arr);
+  return arr;
+}
+
+function sortArr(arr) {
+  const sc = sortC, sd = sortD, isNum = colTypes[sc] === "num";
+  arr.sort((a, b) => {
+    const av = getRow(a)[sc] || "", bv = getRow(b)[sc] || "";
+    return isNum
+      ? (parseFloat(av.replace(/,/g, "")) - parseFloat(bv.replace(/,/g, ""))) * sd
+      : av.localeCompare(bv) * sd;
+  });
+}
+
+// ── Status bar ────────────────────────────────────────────────
+function updateStatus() {
+  const vis = dispIdx === null ? totalRows : dispIdx.length;
+  g("s1").textContent = vis.toLocaleString();
+  g("s2").textContent = totalRows.toLocaleString();
+  g("s3").textContent = headers.length;
+  g("s4").textContent = sortC >= 0 ? `sorted by ${headers[sortC]} ${sortD===1?"↑":"↓"}` : "unsorted";
+  g("s5").textContent = filterStr ? `"${filterStr}"` : "no filter";
+}
+
+// ── Summary: instant via random sample ───────────────────────
+bsum.addEventListener("click", () => {
   const opening = !sidebar.classList.contains("on");
-  sidebar.classList.toggle("on"); btnSum.classList.toggle("on");
-  if (opening && !summaryDone) buildSummary();
+  sidebar.classList.toggle("on");
+  bsum.classList.toggle("on");
+  if (opening && !sumBuilt) buildSummary();
 });
 
 function buildSummary() {
-  const n  = rows.length;
-  const nc = headers.length;
-  const sampled = n > SAMPLE;
+  const sampled = totalRows > SAMPLE;
 
-  // Pick sample indices — partial Fisher-Yates, O(SAMPLE)
-  let pool;
+  // Pick random indices (simple approach: random without replacement)
+  const pool = [];
   if (sampled) {
-    pool = Array.from({length: n}, (_, i) => i);
-    for (let i = 0; i < SAMPLE; i++) {
-      const j = i + Math.floor(Math.random() * (n - i));
-      [pool[i], pool[j]] = [pool[j], pool[i]];
+    const used = new Uint8Array(totalRows);
+    while (pool.length < SAMPLE) {
+      const ri = Math.floor(Math.random() * totalRows);
+      if (!used[ri]) { used[ri] = 1; pool.push(ri); }
     }
-    pool = pool.slice(0, SAMPLE);
   } else {
-    pool = Array.from({length: n}, (_, i) => i);
+    for (let i = 0; i < totalRows; i++) pool.push(i);
   }
 
-  // Single pass across all columns
+  const nc = headers.length;
   const acc = headers.map((_, ci) => ({
-    num: colTypes[ci] === "num",
-    count: 0, nulls: 0, sum: 0,
-    min: Infinity, max: -Infinity,
-    nums: [], freq: {}
+    isNum : colTypes[ci] === "num",
+    count : 0, nulls : 0, sum : 0,
+    min   : Infinity, max : -Infinity,
+    nums  : [], freq  : {}
   }));
 
   for (const ri of pool) {
-    const row = rows[ri];
+    const row = getRow(ri);
     for (let ci = 0; ci < nc; ci++) {
       const s = acc[ci];
       const v = (row[ci] || "").trim();
       if (!v) { s.nulls++; continue; }
       s.count++;
-      if (s.num) {
+      if (s.isNum) {
         const f = parseFloat(v.replace(/,/g, ""));
-        if (isNaN(f)) continue;
-        s.sum += f; if (f < s.min) s.min = f; if (f > s.max) s.max = f; s.nums.push(f);
+        if (!isNaN(f)) {
+          s.sum += f;
+          if (f < s.min) s.min = f;
+          if (f > s.max) s.max = f;
+          s.nums.push(f);
+        }
       } else {
         s.freq[v] = (s.freq[v] || 0) + 1;
       }
     }
   }
 
-  const scale = sampled ? n / pool.length : 1;
+  const scale = sampled ? totalRows / pool.length : 1;
   const fmt = v => {
     if (!isFinite(v)) return "—";
     const a = Math.abs(v);
@@ -526,29 +559,28 @@ function buildSummary() {
     return v % 1 === 0 ? v.toLocaleString() : v.toFixed(2);
   };
 
-  sideBody.innerHTML = "";
-
+  sbb.innerHTML = "";
   if (sampled) {
     const note = document.createElement("div");
-    note.style.cssText = "padding:7px 14px;font-size:.7rem;color:var(--muted);border-bottom:1px solid var(--border);";
-    note.textContent = `Sample of ${SAMPLE.toLocaleString()} rows`;
-    sideBody.appendChild(note);
+    note.style.cssText = "padding:7px 14px;font-size:.7rem;color:var(--muted);border-bottom:1px solid var(--border)";
+    note.textContent = `Based on ${SAMPLE.toLocaleString()}-row sample`;
+    sbb.appendChild(note);
   }
 
   headers.forEach((h, ci) => {
     const s = acc[ci];
-    const div = document.createElement("div"); div.className = "cs";
+    const d = document.createElement("div"); d.className = "cs";
     let body = "";
 
-    if (s.num) {
+    if (s.isNum) {
       s.nums.sort((a, b) => a - b);
-      const len  = s.nums.length;
+      const len = s.nums.length;
       const mean = len ? s.sum / len : 0;
-      const q1   = s.nums[Math.floor(len*.25)] ?? s.min;
-      const med  = s.nums[Math.floor(len*.5)]  ?? mean;
-      const q3   = s.nums[Math.floor(len*.75)] ?? s.max;
-      const rng  = s.max - s.min;
-      const bp   = rng > 0 ? Math.round((mean-s.min)/rng*100) : 50;
+      const q1 = s.nums[Math.floor(len * .25)] ?? s.min;
+      const med = s.nums[Math.floor(len * .5)]  ?? mean;
+      const q3 = s.nums[Math.floor(len * .75)] ?? s.max;
+      const rng = s.max - s.min;
+      const bp = rng > 0 ? Math.round((mean - s.min) / rng * 100) : 50;
       body = `<div class="sg">
         <div class="si"><div class="lbl">count</div><div class="val">${Math.round(s.count*scale).toLocaleString()}</div></div>
         <div class="si"><div class="lbl">nulls</div><div class="val">${Math.round(s.nulls*scale).toLocaleString()}</div></div>
@@ -559,49 +591,33 @@ function buildSummary() {
         <div class="si"><div class="lbl">Q1</div><div class="val">${fmt(q1)}</div></div>
         <div class="si"><div class="lbl">Q3</div><div class="val">${fmt(q3)}</div></div>
         <div class="si"><div class="lbl">sum</div><div class="val">${fmt(s.sum*scale)}</div></div>
-      </div><div class="mbar"><div class="mbar-fill" style="width:${bp}%"></div></div>`;
+      </div><div class="mb"><div class="mbf" style="width:${bp}%"></div></div>`;
     } else {
-      const entries = Object.entries(s.freq).sort((a,b)=>b[1]-a[1]);
-      const top3 = entries.slice(0,3);
+      const entries = Object.entries(s.freq).sort((a, b) => b[1] - a[1]);
       body = `<div class="sg">
         <div class="si"><div class="lbl">count</div><div class="val">${Math.round(s.count*scale).toLocaleString()}</div></div>
         <div class="si"><div class="lbl">nulls</div><div class="val">${Math.round(s.nulls*scale).toLocaleString()}</div></div>
-        <div class="si"><div class="lbl">unique</div><div class="val">${entries.length.toLocaleString()}${sampled?"+":" "}</div></div>
+        <div class="si"><div class="lbl">unique</div><div class="val">${entries.length}${sampled?"+":""}</div></div>
       </div>
-      <div style="margin-top:7px;font-size:.7rem;">
-        <div class="lbl" style="margin-bottom:3px;">Top values</div>
-        ${top3.map(([v,c])=>`<div style="display:flex;justify-content:space-between;gap:6px;margin-bottom:2px;">
-          <span style="font:600 .68rem var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;" title="${esc(v)}">${esc(v)||"(empty)"}</span>
-          <span style="color:var(--muted);white-space:nowrap;">${c.toLocaleString()}</span>
+      <div style="margin-top:7px;font-size:.7rem">
+        <div class="lbl" style="margin-bottom:3px">Top values</div>
+        ${entries.slice(0,3).map(([v,c]) => `<div style="display:flex;justify-content:space-between;gap:6px;margin-bottom:2px">
+          <span style="font:600 .68rem var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1" title="${esc(v)}">${esc(v)||"(empty)"}</span>
+          <span style="color:var(--muted);white-space:nowrap">${c.toLocaleString()}</span>
         </div>`).join("")}
       </div>`;
     }
 
-    div.innerHTML = `<div class="cs-name" title="${esc(h)}">${esc(h)}</div><div class="cs-type">${s.num?"numeric":"text"}</div>${body}`;
-    sideBody.appendChild(div);
+    d.innerHTML = `<div class="csn" title="${esc(h)}">${esc(h)}</div><div class="cst">${s.isNum?"numeric":"text"}</div>${body}`;
+    sbb.appendChild(d);
   });
 
-  summaryDone = true;
+  sumBuilt = true;
 }
 
-// ─────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────
-function updateStatus() {
-  $("sb-vis").textContent   = idxLen().toLocaleString();
-  $("sb-tot").textContent   = rows.length.toLocaleString();
-  $("sb-cols").textContent  = headers.length;
-  $("sb-sort").textContent  = sortC >= 0 ? `sorted by ${headers[sortC]} ${sortD===1?"↑":"↓"}` : "unsorted";
-  $("sb-filter").textContent = filterStr ? `"${filterStr}"` : "no filter";
+function esc(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 }
-
-function showOverlay(msg, pct) {
-  progText.textContent = msg;
-  progBar.style.width  = (pct||0) + "%";
-  overlay.classList.add("on");
-}
-function hideOverlay() { overlay.classList.remove("on"); }
-function esc(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
 </script>
 </body>
 </html>
